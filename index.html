@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buku Besar — Pencatat Keuangan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#F3F4F7; --surface:#FFFFFF; --ink:#131B2E; --ink-soft:#5B6472; --rule:#E2E5EA;
+    --income:#0F9D6B; --income-soft:#E6F5EE; --expense:#C6414F; --expense-soft:#FBEAEC;
+    --accent:#2451B8; --accent-soft:#E9EFFB;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;font-size:14px;-webkit-font-smoothing:antialiased;}
+  .mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;}
+  .app{max-width:1080px;margin:0 auto;padding:28px 20px 80px;}
+
+  header.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:12px;}
+  header.top .brand{display:flex;align-items:center;gap:10px;}
+  header.top .brand img{height:30px;width:30px;object-fit:cover;border-radius:7px;}
+  header.top h1{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;margin:0;letter-spacing:-0.01em;}
+  header.top .tag{font-size:12px;color:var(--ink-soft);border-left:1px solid var(--rule);padding-left:10px;}
+  .header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .ledger-switch{display:flex;align-items:center;gap:6px;}
+  .ledger-switch select{font-family:'Inter',sans-serif;font-size:13px;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;background:#fff;}
+  .sync-pill{font-size:11.5px;padding:5px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:6px;font-weight:500;}
+  .sync-pill .dot{width:7px;height:7px;border-radius:50%;}
+  .sync-on{background:var(--income-soft);color:#0b6b4a;}
+  .sync-on .dot{background:var(--income);}
+  .sync-off{background:#F0F1F3;color:var(--ink-soft);}
+  .sync-off .dot{background:#B7BCC5;}
+
+  nav.tabs{display:flex;gap:4px;border-bottom:1px solid var(--rule);margin-bottom:24px;}
+  nav.tabs button{font-family:'Space Grotesk',sans-serif;font-size:13.5px;font-weight:600;color:var(--ink-soft);background:none;border:none;padding:10px 4px;margin-right:22px;cursor:pointer;border-bottom:2px solid transparent;position:relative;top:1px;}
+  nav.tabs button.active{color:var(--ink);border-bottom-color:var(--ink);}
+
+  .view{display:none;}
+  .view.active{display:block;}
+
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px;}
+  .card{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:16px 18px;}
+  .card .label{font-size:12px;color:var(--ink-soft);margin-bottom:8px;}
+  .card .value{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;}
+  .card.income .value{color:var(--income);}
+  .card.expense .value{color:var(--expense);}
+
+  .panel{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:18px 20px;margin-bottom:18px;}
+  .panel h2{font-family:'Space Grotesk',sans-serif;font-size:15px;margin:0 0 14px;font-weight:600;}
+  .panel p.hint{font-size:12.5px;color:var(--ink-soft);margin:-6px 0 14px;}
+  .charts-row{display:grid;grid-template-columns:1.3fr 1fr;gap:14px;margin-bottom:22px;}
+  .chart-box{position:relative;height:220px;}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th{text-align:left;font-weight:600;color:var(--ink-soft);font-size:11.5px;text-transform:uppercase;letter-spacing:.03em;padding:8px 10px;border-bottom:1px solid var(--rule);}
+  td{padding:9px 10px;border-bottom:1px solid var(--rule);}
+  td.num{text-align:right;font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;}
+  tr:last-child td{border-bottom:none;}
+  .tag-pill{font-size:11.5px;padding:2px 8px;border-radius:20px;background:var(--accent-soft);color:var(--accent);}
+  .amt-in{color:var(--income);}
+  .amt-out{color:var(--expense);}
+  .amt-out::before{content:"(";}
+  .amt-out::after{content:")";}
+  .row-actions button{background:none;border:none;cursor:pointer;color:var(--ink-soft);font-size:12.5px;text-decoration:underline;margin-right:10px;padding:0;}
+  .row-actions button:hover{color:var(--accent);}
+
+  .form-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;align-items:end;margin-bottom:8px;}
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field label{font-size:11.5px;color:var(--ink-soft);font-weight:500;}
+  .field input, .field select, .field textarea{font-family:'Inter',sans-serif;font-size:13.5px;padding:8px 10px;border:1px solid var(--rule);border-radius:6px;background:#FBFBFC;color:var(--ink);}
+  .field input:focus, .field select:focus, .field textarea:focus{outline:2px solid var(--accent);outline-offset:1px;background:#fff;}
+  .btn{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;padding:9px 16px;border-radius:7px;border:none;cursor:pointer;background:var(--ink);color:#fff;}
+  .btn:hover{opacity:.88;}
+  .btn.secondary{background:var(--accent-soft);color:var(--accent);}
+  .btn.ghost{background:none;border:1px solid var(--rule);color:var(--ink);}
+  .btn.danger{background:var(--expense-soft);color:var(--expense);}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  .filters{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;margin-bottom:16px;}
+  .empty{padding:26px;text-align:center;color:var(--ink-soft);font-size:13px;}
+
+  .report-head{display:none;align-items:center;gap:12px;}
+  .report-head img{height:34px;width:34px;object-fit:cover;border-radius:7px;}
+  .instructions{font-size:13px;line-height:1.7;color:var(--ink);}
+  .instructions ol{padding-left:20px;margin:8px 0;}
+  .instructions li{margin-bottom:6px;}
+  .code-line{display:flex;align-items:flex-start;gap:8px;background:#F6F7F9;border:1px solid var(--rule);border-radius:6px;padding:10px;font-family:'IBM Plex Mono',monospace;font-size:12px;margin:8px 0;word-break:break-all;white-space:pre-wrap;}
+  .code-line button{flex-shrink:0;font-size:11px;padding:4px 8px;border-radius:5px;border:1px solid var(--rule);background:#fff;cursor:pointer;}
+  .note{font-size:12.5px;color:var(--ink-soft);background:#F6F7F9;border-radius:7px;padding:10px 12px;margin-top:12px;}
+  .settings-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+  .settings-row input[type=text]{flex:1;min-width:220px;}
+  .settings-row textarea{flex:1;min-width:260px;min-height:110px;font-family:'IBM Plex Mono',monospace;font-size:12px;}
+  .divider{border:none;border-top:1px solid var(--rule);margin:18px 0;}
+  .logo-preview{height:44px;width:44px;border-radius:8px;object-fit:cover;border:1px solid var(--rule);background:#F6F7F9;display:none;}
+  .user-chip{display:flex;align-items:center;gap:8px;font-size:13px;background:#F6F7F9;border:1px solid var(--rule);border-radius:20px;padding:5px 12px 5px 5px;}
+  .user-chip img{width:22px;height:22px;border-radius:50%;}
+
+  @media (max-width:760px){
+    .cards{grid-template-columns:1fr;}
+    .charts-row{grid-template-columns:1fr;}
+    .form-grid{grid-template-columns:1fr 1fr;}
+    .filters{grid-template-columns:1fr 1fr;}
+    header.top{flex-direction:column;align-items:flex-start;}
+  }
+
+  @media print{
+    nav.tabs, .no-print{display:none !important;}
+    .view{display:none !important;}
+    .view.printing{display:block !important;}
+    body{background:#fff;}
+    .panel{border:none;padding:0;}
+    .report-head{display:flex !important;margin-bottom:14px;}
+    .report-head h1{font-family:'Space Grotesk',sans-serif;font-size:18px;margin:0 0 2px;}
+    .report-head .period{font-size:12.5px;color:var(--ink-soft);}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="top">
+    <div class="brand">
+      <img id="brandLogo" alt="">
+      <h1 id="brandName">Buku Besar</h1>
+      <span class="tag">Pencatat keuangan pribadi</span>
+    </div>
+    <div class="header-right no-print">
+      <div class="ledger-switch">
+        <select id="ledgerSelect"></select>
+        <button class="btn ghost" id="btnNewLedger">+ Buku baru</button>
+      </div>
+      <div id="userChipWrap"></div>
+      <div id="syncPillWrap"></div>
+    </div>
+  </header>
+
+  <nav class="tabs no-print">
+    <button data-tab="dashboard" class="active">Dashboard</button>
+    <button data-tab="transaksi">Transaksi</button>
+    <button data-tab="laporan">Laporan</button>
+    <button data-tab="pengaturan">Pengaturan</button>
+  </nav>
+
+  <!-- DASHBOARD -->
+  <section class="view active" id="view-dashboard">
+    <div class="cards">
+      <div class="card income"><div class="label">Total pemasukan</div><div class="value mono" id="sumIncome">Rp 0</div></div>
+      <div class="card expense"><div class="label">Total pengeluaran</div><div class="value mono" id="sumExpense">Rp 0</div></div>
+      <div class="card"><div class="label">Saldo</div><div class="value mono" id="sumBalance">Rp 0</div></div>
+    </div>
+    <div class="charts-row">
+      <div class="panel"><h2>Arus kas per bulan</h2><div class="chart-box"><canvas id="chartTrend"></canvas></div></div>
+      <div class="panel"><h2>Pengeluaran per kategori</h2><div class="chart-box"><canvas id="chartCategory"></canvas></div></div>
+    </div>
+    <div class="panel">
+      <h2>Transaksi terbaru</h2>
+      <table><thead><tr><th>Tanggal</th><th>Kategori</th><th>Catatan</th><th style="text-align:right">Jumlah</th></tr></thead>
+      <tbody id="recentBody"></tbody></table>
+      <div class="empty" id="recentEmpty" style="display:none;">Belum ada transaksi. Tambahkan lewat tab Transaksi.</div>
+    </div>
+  </section>
+
+  <!-- TRANSAKSI -->
+  <section class="view" id="view-transaksi">
+    <div class="panel">
+      <h2>Tambah transaksi</h2>
+      <div class="form-grid">
+        <div class="field"><label>Tanggal</label><input type="date" id="fDate"></div>
+        <div class="field"><label>Tipe</label>
+          <select id="fType"><option value="in">Pemasukan</option><option value="out">Pengeluaran</option></select>
+        </div>
+        <div class="field"><label>Kategori</label><input type="text" id="fCategory" placeholder="mis. Gaji, Makanan"></div>
+        <div class="field"><label>Jumlah (Rp)</label><input type="number" id="fAmount" placeholder="0" min="0"></div>
+      </div>
+      <div class="form-grid" style="margin-top:0;">
+        <div class="field" style="grid-column:1/4;"><label>Catatan (opsional)</label><input type="text" id="fNote" placeholder="Keterangan singkat"></div>
+        <button class="btn" id="btnAdd">Tambah</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Semua transaksi</h2>
+      <table><thead><tr><th>Tanggal</th><th>Tipe</th><th>Kategori</th><th>Catatan</th><th style="text-align:right">Jumlah</th><th></th></tr></thead>
+      <tbody id="txBody"></tbody></table>
+      <div class="empty" id="txEmpty" style="display:none;">Belum ada transaksi.</div>
+    </div>
+  </section>
+
+  <!-- LAPORAN -->
+  <section class="view" id="view-laporan">
+    <div class="panel no-print">
+      <h2>Filter laporan</h2>
+      <div class="filters">
+        <div class="field"><label>Dari tanggal</label><input type="date" id="repFrom"></div>
+        <div class="field"><label>Sampai tanggal</label><input type="date" id="repTo"></div>
+        <div class="field"><label>Kategori</label><select id="repCategory"><option value="">Semua kategori</option></select></div>
+        <button class="btn secondary" id="btnGenReport">Tampilkan</button>
+      </div>
+      <button class="btn ghost" id="btnPrint">Cetak / Simpan PDF</button>
+    </div>
+    <div class="panel" id="reportPanel">
+      <div class="report-head">
+        <img id="reportLogo" alt="">
+        <div>
+          <h1 id="reportBrandName">Buku Besar</h1>
+          <div class="period" id="reportPeriodLabel"></div>
+        </div>
+      </div>
+      <div class="cards" style="margin-bottom:16px;">
+        <div class="card income"><div class="label">Pemasukan</div><div class="value mono" id="repIncome">Rp 0</div></div>
+        <div class="card expense"><div class="label">Pengeluaran</div><div class="value mono" id="repExpense">Rp 0</div></div>
+        <div class="card"><div class="label">Saldo periode</div><div class="value mono" id="repBalance">Rp 0</div></div>
+      </div>
+      <table><thead><tr><th>Tanggal</th><th>Tipe</th><th>Kategori</th><th>Catatan</th><th style="text-align:right">Jumlah</th></tr></thead>
+      <tbody id="repBody"></tbody></table>
+      <div class="empty" id="repEmpty" style="display:none;">Tidak ada transaksi pada periode ini.</div>
+    </div>
+  </section>
+
+  <!-- PENGATURAN -->
+  <section class="view" id="view-pengaturan">
+
+    <div class="panel">
+      <h2>Branding buku besar ini</h2>
+      <p class="hint">Nama, logo, dan warna ini hanya berlaku untuk buku besar yang sedang aktif.</p>
+      <div class="settings-row">
+        <div class="field" style="flex:1;min-width:220px;"><label>Nama buku besar</label><input type="text" id="brandNameInput" placeholder="mis. Kas RT 05, Toko Berkah, Kas Pribadi"></div>
+        <div class="field"><label>Warna aksen</label><input type="color" id="accentInput" value="#2451B8"></div>
+      </div>
+      <div class="settings-row">
+        <img class="logo-preview" id="logoPreview" alt="">
+        <div class="field"><label>Logo (opsional)</label><input type="file" accept="image/*" id="logoInput"></div>
+        <button class="btn ghost" id="btnRemoveLogo">Hapus logo</button>
+      </div>
+      <button class="btn" id="btnSaveBranding">Simpan branding</button>
+    </div>
+
+    <div class="panel">
+      <h2>Kelola beberapa buku besar</h2>
+      <p class="hint">Buat buku besar terpisah untuk kelompok/unit berbeda — masing-masing tersimpan sebagai dokumen Firestore terpisah, otomatis realtime di semua perangkat yang login.</p>
+      <table><thead><tr><th>Nama buku besar</th><th></th></tr></thead><tbody id="ledgerListBody"></tbody></table>
+    </div>
+
+    <div class="panel">
+      <h2>Sinkronisasi Firebase (gratis)</h2>
+      <div class="settings-row">
+        <textarea id="configInput" placeholder='Tempel firebaseConfig dari Firebase Console di sini, contoh:
+const firebaseConfig = {
+  apiKey: "...",
+  authDomain: "...",
+  projectId: "...",
+  ...
+};'></textarea>
+      </div>
+      <div class="settings-row">
+        <button class="btn" id="btnSaveConfig">Simpan konfigurasi</button>
+        <button class="btn secondary" id="btnSignIn">Masuk dengan Google</button>
+        <button class="btn ghost" id="btnSignOut" style="display:none;">Keluar</button>
+      </div>
+      <div class="settings-row"><span id="statusText" style="font-size:12.5px;color:var(--ink-soft);"></span></div>
+      <div class="note">Setiap transaksi tersimpan sebagai dokumen terpisah di Firestore milik akun Google Anda, tersinkron <strong>realtime</strong> ke semua perangkat yang login — tanpa risiko file tertimpa seperti pada penyimpanan berbasis satu file.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Cara setup Firebase (sekali saja, gratis)</h2>
+      <div class="instructions">
+        <ol>
+          <li>Buka <strong>console.firebase.google.com</strong> → <strong>Add project</strong> → beri nama bebas (mis. "Buku Besar") → selesaikan pembuatan project.</li>
+          <li>Di menu kiri, klik <strong>Build → Firestore Database → Create database</strong>. Pilih lokasi server (mis. asia-southeast2/Jakarta), lalu pilih mode <strong>Start in production mode</strong>.</li>
+          <li>Masuk ke tab <strong>Rules</strong> pada Firestore, hapus isinya, ganti dengan aturan berikut supaya data setiap orang hanya bisa diakses oleh pemiliknya sendiri, lalu klik <strong>Publish</strong>:</li>
+        </ol>
+        <div class="code-line" id="rulesText"></div>
+        <ol start="4">
+          <li>Masuk ke <strong>Build → Authentication → Get started</strong>. Di tab <strong>Sign-in method</strong>, aktifkan provider <strong>Google</strong>.</li>
+          <li>Klik ikon ⚙ (Project settings) di pojok kiri atas → scroll ke bawah ke bagian <strong>Your apps</strong> → klik ikon <strong>Web (&lt;/&gt;)</strong> untuk mendaftarkan aplikasi web baru → beri nama bebas → <strong>Register app</strong>.</li>
+          <li>Firebase akan menampilkan kode <code>const firebaseConfig = {...}</code>. Salin seluruh kode itu, tempel ke kotak di atas, lalu klik <strong>Simpan konfigurasi</strong>.</li>
+          <li>Klik <strong>Masuk dengan Google</strong>. Selesai — data otomatis tersinkron di semua perangkat yang login dengan akun Google yang sama.</li>
+        </ol>
+        <div class="note">Gratis selamanya selama pemakaian di bawah kuota harian (20.000 penulisan/hari, 1GB penyimpanan) — jauh di atas kebutuhan pencatatan pribadi maupun kelompok kecil.</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const RULES_TEXT = `rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}`;
+  document.getElementById('rulesText').textContent = RULES_TEXT;
+
+  const fmt = n => 'Rp ' + Math.round(n).toLocaleString('id-ID');
+  const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+  let ledgers = [];
+  let activeLedgerId = null;
+  let fbApp=null, fbAuth=null, fbDb=null, currentUser=null, unsubscribe=null;
+  let chartTrend=null, chartCategory=null;
+
+  function activeLedger(){ return ledgers.find(l=>l.id===activeLedgerId) || ledgers[0]; }
+
+  // ---------- local cache (per-device, offline fallback) ----------
+  function loadLocal(){
+    try{ ledgers = JSON.parse(localStorage.getItem('bb_ledgers')) || []; }catch(e){ ledgers = []; }
+    if(!ledgers.length) ledgers = [{ id: uid(), name:'Buku Besar', logo:null, accent:'#2451B8', transactions:[] }];
+    activeLedgerId = localStorage.getItem('bb_active') || ledgers[0].id;
+    if(!ledgers.find(l=>l.id===activeLedgerId)) activeLedgerId = ledgers[0].id;
+  }
+  function saveLocal(){
+    try{ localStorage.setItem('bb_ledgers', JSON.stringify(ledgers)); localStorage.setItem('bb_active', activeLedgerId); }catch(e){}
+  }
+
+  // ---------- tabs ----------
+  document.querySelectorAll('nav.tabs button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('view-'+btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  function categories(){ return [...new Set(activeLedger().transactions.map(t=>t.category).filter(Boolean))]; }
+
+  function hexToSoft(hex){
+    try{ const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16); return `rgba(${r},${g},${b},0.12)`; }catch(e){ return '#E9EFFB'; }
+  }
+
+  function applyBranding(){
+    const l = activeLedger();
+    document.documentElement.style.setProperty('--accent', l.accent || '#2451B8');
+    document.documentElement.style.setProperty('--accent-soft', hexToSoft(l.accent || '#2451B8'));
+    document.getElementById('brandName').textContent = l.name || 'Buku Besar';
+    document.getElementById('reportBrandName').textContent = l.name || 'Buku Besar';
+    const logoEl = document.getElementById('brandLogo'), reportLogoEl = document.getElementById('reportLogo'), previewEl = document.getElementById('logoPreview');
+    if(l.logo){ logoEl.src=l.logo; logoEl.style.display='inline-block'; reportLogoEl.src=l.logo; reportLogoEl.style.display='inline-block'; previewEl.src=l.logo; previewEl.style.display='inline-block'; }
+    else{ logoEl.style.display='none'; reportLogoEl.style.display='none'; previewEl.style.display='none'; }
+    document.getElementById('brandNameInput').value = l.name || '';
+    document.getElementById('accentInput').value = l.accent || '#2451b8';
+    document.title = (l.name || 'Buku Besar') + ' — Pencatat Keuangan';
+  }
+
+  function persistLedger(l){
+    saveLocal();
+    if(currentUser && fbDb){
+      setDoc(doc(fbDb, 'users', currentUser.uid, 'ledgers', l.id), l).catch(()=>setStatus('Gagal menyimpan, akan dicoba lagi.'));
+    }
+  }
+  function persistDeleteLedger(id){
+    saveLocal();
+    if(currentUser && fbDb){
+      deleteDoc(doc(fbDb, 'users', currentUser.uid, 'ledgers', id)).catch(()=>{});
+    }
+  }
+
+  document.getElementById('btnSaveBranding').addEventListener('click', ()=>{
+    const l = activeLedger();
+    l.name = document.getElementById('brandNameInput').value.trim() || 'Buku Besar';
+    l.accent = document.getElementById('accentInput').value;
+    applyBranding(); renderLedgerSelect(); renderLedgerList(); persistLedger(l);
+  });
+  document.getElementById('logoInput').addEventListener('change', (e)=>{
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{ const l=activeLedger(); l.logo = reader.result; applyBranding(); persistLedger(l); };
+    reader.readAsDataURL(file);
+  });
+  document.getElementById('btnRemoveLogo').addEventListener('click', ()=>{
+    const l = activeLedger(); l.logo = null; applyBranding(); persistLedger(l);
+  });
+
+  function renderLedgerSelect(){
+    document.getElementById('ledgerSelect').innerHTML = ledgers.map(l=>`<option value="${l.id}" ${l.id===activeLedgerId?'selected':''}>${l.name}</option>`).join('');
+  }
+  function renderLedgerList(){
+    const body = document.getElementById('ledgerListBody');
+    body.innerHTML = '';
+    ledgers.forEach(l=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${l.name}${l.id===activeLedgerId ? ' <span class="tag-pill">Aktif</span>' : ''}</td>
+        <td class="row-actions">
+          ${l.id!==activeLedgerId ? `<button data-switch="${l.id}">Pindah ke sini</button>` : ''}
+          <button data-remove="${l.id}" ${ledgers.length<=1?'disabled':''}>Hapus</button>
+        </td>`;
+      body.appendChild(tr);
+    });
+    body.querySelectorAll('[data-switch]').forEach(b=> b.addEventListener('click', ()=> switchLedger(b.dataset.switch)));
+    body.querySelectorAll('[data-remove]').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        if(ledgers.length<=1) return;
+        if(!confirm('Hapus buku besar ini beserta seluruh transaksinya?')) return;
+        const id = b.dataset.remove;
+        const wasActive = id === activeLedgerId;
+        ledgers = ledgers.filter(l=>l.id!==id);
+        if(wasActive) activeLedgerId = ledgers[0].id;
+        persistDeleteLedger(id); saveLocal(); refreshEverything();
+      });
+    });
+  }
+  function switchLedger(id){ activeLedgerId = id; saveLocal(); refreshEverything(); }
+  document.getElementById('ledgerSelect').addEventListener('change', (e)=> switchLedger(e.target.value));
+  document.getElementById('btnNewLedger').addEventListener('click', ()=>{
+    const name = prompt('Nama buku besar baru (mis. nama kelompok/unit):', 'Buku Besar Baru');
+    if(!name) return;
+    const l = { id: uid(), name: name.trim(), logo:null, accent:'#2451B8', transactions:[] };
+    ledgers.push(l); activeLedgerId = l.id;
+    saveLocal(); refreshEverything(); persistLedger(l);
+  });
+
+  function refreshEverything(){ applyBranding(); renderLedgerSelect(); renderLedgerList(); renderDashboard(); renderTxTable(); renderCategoryFilter(); }
+
+  function renderDashboard(){
+    const transactions = activeLedger().transactions;
+    const income = transactions.filter(t=>t.type==='in').reduce((a,t)=>a+t.amount,0);
+    const expense = transactions.filter(t=>t.type==='out').reduce((a,t)=>a+t.amount,0);
+    document.getElementById('sumIncome').textContent = fmt(income);
+    document.getElementById('sumExpense').textContent = fmt(expense);
+    document.getElementById('sumBalance').textContent = fmt(income-expense);
+    const recent = [...transactions].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6);
+    const body = document.getElementById('recentBody'); body.innerHTML = '';
+    recent.forEach(t=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${t.date}</td><td><span class="tag-pill">${t.category||'-'}</span></td><td>${t.note||''}</td><td class="num ${t.type==='in'?'amt-in':'amt-out'}">${fmt(t.amount)}</td>`;
+      body.appendChild(tr);
+    });
+    document.getElementById('recentEmpty').style.display = recent.length ? 'none':'block';
+    renderCharts(transactions);
+  }
+
+  function renderCharts(transactions){
+    const byMonth = {};
+    transactions.forEach(t=>{ const m=t.date.slice(0,7); byMonth[m]=byMonth[m]||{in:0,out:0}; byMonth[m][t.type]+=t.amount; });
+    const months = Object.keys(byMonth).sort().slice(-6);
+    const ctx1 = document.getElementById('chartTrend').getContext('2d');
+    if(chartTrend) chartTrend.destroy();
+    chartTrend = new Chart(ctx1, { type:'bar', data:{ labels:months, datasets:[
+      {label:'Pemasukan', data:months.map(m=>byMonth[m].in), backgroundColor:'#0F9D6B', borderRadius:4},
+      {label:'Pengeluaran', data:months.map(m=>byMonth[m].out), backgroundColor:'#C6414F', borderRadius:4}
+    ]}, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}}, scales:{y:{ticks:{callback:v=>(v/1000)+'k'}}} }});
+
+    const byCat = {};
+    transactions.filter(t=>t.type==='out').forEach(t=>{ byCat[t.category||'Lainnya']=(byCat[t.category||'Lainnya']||0)+t.amount; });
+    const cats = Object.keys(byCat);
+    const palette = ['#C6414F','#2451B8','#E8A03D','#5B6472','#0F9D6B','#8B5CF6','#DB6B2F'];
+    const ctx2 = document.getElementById('chartCategory').getContext('2d');
+    if(chartCategory) chartCategory.destroy();
+    chartCategory = new Chart(ctx2, { type:'doughnut', data:{ labels:cats, datasets:[{data:cats.map(c=>byCat[c]), backgroundColor:cats.map((_,i)=>palette[i%palette.length])}]},
+      options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}} }});
+  }
+
+  function renderTxTable(){
+    const transactions = activeLedger().transactions;
+    const body = document.getElementById('txBody'); body.innerHTML = '';
+    const sorted = [...transactions].sort((a,b)=>b.date.localeCompare(a.date));
+    sorted.forEach(t=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${t.date}</td><td>${t.type==='in'?'Pemasukan':'Pengeluaran'}</td><td><span class="tag-pill">${t.category||'-'}</span></td><td>${t.note||''}</td>
+        <td class="num ${t.type==='in'?'amt-in':'amt-out'}">${fmt(t.amount)}</td><td class="row-actions"><button data-del="${t.id}">Hapus</button></td>`;
+      body.appendChild(tr);
+    });
+    document.getElementById('txEmpty').style.display = sorted.length ? 'none' : 'block';
+    body.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=>{
+      const l = activeLedger();
+      l.transactions = l.transactions.filter(t=>t.id !== b.dataset.del);
+      refreshEverything(); persistLedger(l);
+    }));
+  }
+
+  function renderCategoryFilter(){
+    const sel = document.getElementById('repCategory'); const current = sel.value;
+    sel.innerHTML = '<option value="">Semua kategori</option>' + categories().map(c=>`<option value="${c}">${c}</option>`).join('');
+    sel.value = current;
+  }
+
+  document.getElementById('btnAdd').addEventListener('click', ()=>{
+    const date = document.getElementById('fDate').value;
+    const type = document.getElementById('fType').value;
+    const category = document.getElementById('fCategory').value.trim();
+    const amount = parseFloat(document.getElementById('fAmount').value);
+    const note = document.getElementById('fNote').value.trim();
+    if(!date || !amount || amount<=0){ alert('Isi tanggal dan jumlah dengan benar.'); return; }
+    const l = activeLedger();
+    l.transactions.push({ id: uid(), date, type, category, amount, note });
+    document.getElementById('fCategory').value=''; document.getElementById('fAmount').value=''; document.getElementById('fNote').value='';
+    refreshEverything(); persistLedger(l);
+  });
+
+  document.getElementById('btnGenReport').addEventListener('click', generateReport);
+  function generateReport(){
+    const transactions = activeLedger().transactions;
+    const from = document.getElementById('repFrom').value, to = document.getElementById('repTo').value, cat = document.getElementById('repCategory').value;
+    let filtered = [...transactions];
+    if(from) filtered = filtered.filter(t=>t.date >= from);
+    if(to) filtered = filtered.filter(t=>t.date <= to);
+    if(cat) filtered = filtered.filter(t=>t.category === cat);
+    filtered.sort((a,b)=>a.date.localeCompare(b.date));
+    const income = filtered.filter(t=>t.type==='in').reduce((a,t)=>a+t.amount,0);
+    const expense = filtered.filter(t=>t.type==='out').reduce((a,t)=>a+t.amount,0);
+    document.getElementById('repIncome').textContent = fmt(income);
+    document.getElementById('repExpense').textContent = fmt(expense);
+    document.getElementById('repBalance').textContent = fmt(income-expense);
+    document.getElementById('reportPeriodLabel').textContent = (from||'awal') + ' s/d ' + (to||'sekarang') + (cat ? ' · Kategori: '+cat : '');
+    const body = document.getElementById('repBody'); body.innerHTML = '';
+    filtered.forEach(t=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${t.date}</td><td>${t.type==='in'?'Pemasukan':'Pengeluaran'}</td><td>${t.category||'-'}</td><td>${t.note||''}</td><td class="num ${t.type==='in'?'amt-in':'amt-out'}">${fmt(t.amount)}</td>`;
+      body.appendChild(tr);
+    });
+    document.getElementById('repEmpty').style.display = filtered.length ? 'none' : 'block';
+  }
+  document.getElementById('btnPrint').addEventListener('click', ()=>{ generateReport(); window.print(); });
+
+  // ---------- Firebase ----------
+  function setStatus(msg){ document.getElementById('statusText').textContent = msg; }
+  function setSyncPill(on){
+    document.getElementById('syncPillWrap').innerHTML = on
+      ? '<span class="sync-pill sync-on"><span class="dot"></span>Realtime tersinkron</span>'
+      : '<span class="sync-pill sync-off"><span class="dot"></span>Belum masuk akun</span>';
+  }
+  function setUserChip(user){
+    const wrap = document.getElementById('userChipWrap');
+    wrap.innerHTML = user ? `<span class="user-chip"><img src="${user.photoURL||''}" onerror="this.style.display='none'">${user.displayName||user.email}</span>` : '';
+  }
+
+  function parseFirebaseConfigInput(text){
+    let t = text.trim().replace(/^const\s+firebaseConfig\s*=\s*/,'').replace(/;\s*$/,'');
+    try{ return (new Function('return (' + t + ')'))(); }catch(e){ return null; }
+  }
+
+  function initFirebase(config){
+    try{
+      fbApp = initializeApp(config);
+      fbAuth = getAuth(fbApp);
+      fbDb = getFirestore(fbApp);
+      onAuthStateChanged(fbAuth, (user)=>{
+        currentUser = user;
+        document.getElementById('btnSignIn').style.display = user ? 'none' : 'inline-block';
+        document.getElementById('btnSignOut').style.display = user ? 'inline-block' : 'none';
+        setUserChip(user);
+        if(user){
+          setSyncPill(true);
+          setStatus('Masuk sebagai ' + (user.displayName||user.email));
+          attachListener(user.uid);
+        } else {
+          setSyncPill(false);
+          setStatus('Belum masuk akun. Data hanya tersimpan lokal di perangkat ini.');
+          if(unsubscribe){ unsubscribe(); unsubscribe=null; }
+        }
+      });
+    }catch(e){
+      setStatus('Konfigurasi tidak valid, periksa kembali.');
+    }
+  }
+
+  function attachListener(userId){
+    if(unsubscribe) unsubscribe();
+    const ref = collection(fbDb, 'users', userId, 'ledgers');
+    unsubscribe = onSnapshot(ref, (snap)=>{
+      if(snap.empty){
+        // first time: push local ledgers up
+        ledgers.forEach(l=> setDoc(doc(fbDb,'users',userId,'ledgers',l.id), l));
+        return;
+      }
+      const remote = [];
+      snap.forEach(d=> remote.push(d.data()));
+      ledgers = remote;
+      if(!ledgers.find(l=>l.id===activeLedgerId)) activeLedgerId = ledgers[0].id;
+      saveLocal();
+      refreshEverything();
+      setStatus('Tersinkron realtime · ' + new Date().toLocaleTimeString('id-ID'));
+    }, (err)=>{
+      setStatus('Gagal memuat data dari server.');
+    });
+  }
+
+  document.getElementById('btnSaveConfig').addEventListener('click', ()=>{
+    const cfg = parseFirebaseConfigInput(document.getElementById('configInput').value);
+    if(!cfg || !cfg.apiKey){ alert('Konfigurasi tidak terbaca, pastikan Anda menempel kode firebaseConfig lengkap.'); return; }
+    localStorage.setItem('bb_fbconfig', JSON.stringify(cfg));
+    initFirebase(cfg);
+    setStatus('Konfigurasi disimpan. Klik "Masuk dengan Google".');
+  });
+  document.getElementById('btnSignIn').addEventListener('click', async ()=>{
+    if(!fbAuth){ alert('Simpan konfigurasi Firebase terlebih dahulu.'); return; }
+    try{ await signInWithPopup(fbAuth, new GoogleAuthProvider()); }
+    catch(e){ setStatus('Gagal masuk: ' + e.message); }
+  });
+  document.getElementById('btnSignOut').addEventListener('click', async ()=>{
+    if(fbAuth) await signOut(fbAuth);
+  });
+
+  // ---------- init ----------
+  (function init(){
+    loadLocal();
+    refreshEverything();
+    document.getElementById('fDate').valueAsDate = new Date();
+    try{
+      const saved = JSON.parse(localStorage.getItem('bb_fbconfig'));
+      if(saved && saved.apiKey){
+        document.getElementById('configInput').value = 'const firebaseConfig = ' + JSON.stringify(saved, null, 2) + ';';
+        initFirebase(saved);
+      } else {
+        setSyncPill(false);
+      }
+    }catch(e){ setSyncPill(false); }
+  })();
+</script>
+</body>
+</html>
