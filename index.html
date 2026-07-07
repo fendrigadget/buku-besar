@@ -7,6 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
   :root{
     --bg:#F3F4F7; --surface:#FFFFFF; --ink:#131B2E; --ink-soft:#5B6472; --rule:#E2E5EA;
@@ -78,6 +81,7 @@
   .btn.danger{background:var(--expense-soft);color:var(--expense);}
   .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
   .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .btn.sm{padding:5px 10px;font-size:12px;}
 
   .filters{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;margin-bottom:16px;}
   .empty{padding:26px;text-align:center;color:var(--ink-soft);font-size:13px;}
@@ -97,13 +101,25 @@
   .logo-preview{height:44px;width:44px;border-radius:8px;object-fit:cover;border:1px solid var(--rule);background:#F6F7F9;display:none;}
   .user-chip{display:flex;align-items:center;gap:8px;font-size:13px;background:#F6F7F9;border:1px solid var(--rule);border-radius:20px;padding:5px 12px 5px 5px;}
   .user-chip img{width:22px;height:22px;border-radius:50%;}
+  .share-link{font-size:11.5px;color:var(--accent);word-break:break-all;}
 
   @media (max-width:760px){
     .cards{grid-template-columns:1fr;}
     .charts-row{grid-template-columns:1fr;}
     .form-grid{grid-template-columns:1fr 1fr;}
     .filters{grid-template-columns:1fr 1fr;}
-    header.top{flex-direction:column;align-items:flex-start;}
+    header.top{flex-direction:column;align-items:stretch;}
+    header.top .brand{justify-content:center;text-align:center;}
+    header.top .brand .tag{display:none;}
+    .header-right{flex-direction:column;align-items:stretch;}
+    .header-right > *{width:100%;}
+    .ledger-switch{width:100%;flex-direction:column;align-items:stretch;}
+    .ledger-switch select{width:100%;}
+    #userChipWrap, #syncPillWrap{display:flex;justify-content:center;}
+    .btn{width:100%;text-align:center;}
+    .panel{padding:16px;overflow-x:auto;}
+    table{min-width:520px;}
+    .code-line{font-size:10.5px;}
   }
 
   @media print{
@@ -119,7 +135,9 @@
 </style>
 </head>
 <body>
-<div class="app">
+
+<!-- ================= MAIN APP ================= -->
+<div class="app" id="mainApp">
 
   <header class="top">
     <div class="brand">
@@ -133,6 +151,8 @@
         <button class="btn ghost" id="btnNewLedger">+ Buku baru</button>
       </div>
       <div id="userChipWrap"></div>
+      <button class="btn secondary" id="btnSignIn">Masuk dengan Google</button>
+      <button class="btn ghost" id="btnSignOut" style="display:none;">Keluar</button>
       <div id="syncPillWrap"></div>
     </div>
   </header>
@@ -166,18 +186,35 @@
   <!-- TRANSAKSI -->
   <section class="view" id="view-transaksi">
     <div class="panel">
+      <h2>Scan nota (opsional)</h2>
+      <p class="hint">Foto atau upload nota — sistem coba baca tanggal & totalnya otomatis, lalu foto notanya tersimpan sebagai bukti di transaksi ini. Selalu periksa hasilnya sebelum menyimpan, OCR bisa keliru.</p>
+      <div class="settings-row">
+        <input type="file" accept="image/*" capture="environment" id="receiptInput">
+        <button class="btn ghost" id="btnClearReceipt" style="display:none;">Hapus foto</button>
+      </div>
+      <img id="receiptPreview" style="display:none;max-height:160px;border-radius:8px;margin-top:4px;border:1px solid var(--rule);">
+      <div id="ocrStatus" style="font-size:12.5px;color:var(--ink-soft);margin-top:6px;"></div>
+    </div>
+    <div class="panel">
       <h2>Tambah transaksi</h2>
       <div class="form-grid">
         <div class="field"><label>Tanggal</label><input type="date" id="fDate"></div>
         <div class="field"><label>Tipe</label>
           <select id="fType"><option value="in">Pemasukan</option><option value="out">Pengeluaran</option></select>
         </div>
-        <div class="field"><label>Kategori</label><input type="text" id="fCategory" placeholder="mis. Gaji, Makanan"></div>
-        <div class="field"><label>Jumlah (Rp)</label><input type="number" id="fAmount" placeholder="0" min="0"></div>
+        <div class="field"><label>Kategori</label><input type="text" id="fCategory" list="categoryList" placeholder="mis. Gaji, Makanan" autocomplete="off"><datalist id="categoryList"></datalist></div>
+        <div class="field"><label>Jumlah (Rp)</label><input type="number" id="fAmount" placeholder="0" min="0"><span id="amountPreview" style="font-size:11.5px;color:var(--ink-soft);margin-top:2px;"></span></div>
       </div>
       <div class="form-grid" style="margin-top:0;">
         <div class="field" style="grid-column:1/4;"><label>Catatan (opsional)</label><input type="text" id="fNote" placeholder="Keterangan singkat"></div>
-        <button class="btn" id="btnAdd">Tambah</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" id="btnAdd">Tambah</button>
+          <button class="btn ghost" id="btnCancelEdit" style="display:none;">Batal</button>
+        </div>
+      </div>
+      <div id="txToast" style="display:none;margin-top:12px;padding:10px 14px;background:var(--accent-soft);color:var(--accent);border-radius:7px;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <span id="txToastText"></span>
+        <button id="btnUndoTx" class="btn ghost sm" style="background:#fff;">Urungkan</button>
       </div>
     </div>
     <div class="panel">
@@ -199,6 +236,7 @@
         <button class="btn secondary" id="btnGenReport">Tampilkan</button>
       </div>
       <button class="btn ghost" id="btnPrint">Cetak / Simpan PDF</button>
+      <button class="btn secondary" id="btnShare">Share Laporan</button>
     </div>
     <div class="panel" id="reportPanel">
       <div class="report-head">
@@ -238,9 +276,9 @@
     </div>
 
     <div class="panel">
-      <h2>Kelola beberapa buku besar</h2>
-      <p class="hint">Buat buku besar terpisah untuk kelompok/unit berbeda — masing-masing tersimpan sebagai dokumen Firestore terpisah, otomatis realtime di semua perangkat yang login.</p>
-      <table><thead><tr><th>Nama buku besar</th><th></th></tr></thead><tbody id="ledgerListBody"></tbody></table>
+      <h2>Kelola beberapa buku besar & link publik</h2>
+      <p class="hint">Buat buku besar terpisah untuk kelompok/unit berbeda. Anda juga bisa memilih buku besar mana yang boleh dilihat publik (read-only, live, tanpa login) lewat link, dan mana yang tetap privat.</p>
+      <table><thead><tr><th>Nama buku besar</th><th>Status publik</th><th></th></tr></thead><tbody id="ledgerListBody"></tbody></table>
     </div>
 
     <div class="panel">
@@ -256,33 +294,63 @@ const firebaseConfig = {
       </div>
       <div class="settings-row">
         <button class="btn" id="btnSaveConfig">Simpan konfigurasi</button>
-        <button class="btn secondary" id="btnSignIn">Masuk dengan Google</button>
-        <button class="btn ghost" id="btnSignOut" style="display:none;">Keluar</button>
+        <span id="statusText" style="font-size:12.5px;color:var(--ink-soft);"></span>
       </div>
-      <div class="settings-row"><span id="statusText" style="font-size:12.5px;color:var(--ink-soft);"></span></div>
-      <div class="note">Setiap transaksi tersimpan sebagai dokumen terpisah di Firestore milik akun Google Anda, tersinkron <strong>realtime</strong> ke semua perangkat yang login — tanpa risiko file tertimpa seperti pada penyimpanan berbasis satu file.</div>
+      <div class="note">Tombol <strong>Masuk dengan Google</strong> ada di pojok kanan atas halaman. Setiap transaksi tersimpan sebagai dokumen terpisah di Firestore, tersinkron <strong>realtime</strong> ke semua perangkat yang login.</div>
+      <div class="note"><strong>Penting untuk fitur link publik:</strong> supaya orang yang belum pernah buka aplikasi ini juga bisa melihat laporan lewat link (tanpa setup apapun), Anda perlu tempel <code>firebaseConfig</code> yang sama ini langsung ke dalam kode sumber <code>index.html</code> Anda, di baris <code>const BAKED_FIREBASE_CONFIG = null;</code> menjadi <code>const BAKED_FIREBASE_CONFIG = { ...config Anda... };</code> — ini aman dilakukan, config ini bukan rahasia, keamanan tetap dijaga oleh Security Rules.</div>
     </div>
 
     <div class="panel">
       <h2>Cara setup Firebase (sekali saja, gratis)</h2>
       <div class="instructions">
         <ol>
-          <li>Buka <strong>console.firebase.google.com</strong> → <strong>Add project</strong> → beri nama bebas (mis. "Buku Besar") → selesaikan pembuatan project.</li>
-          <li>Di menu kiri, klik <strong>Build → Firestore Database → Create database</strong>. Pilih lokasi server (mis. asia-southeast2/Jakarta), lalu pilih mode <strong>Start in production mode</strong>.</li>
-          <li>Masuk ke tab <strong>Rules</strong> pada Firestore, hapus isinya, ganti dengan aturan berikut supaya data setiap orang hanya bisa diakses oleh pemiliknya sendiri, lalu klik <strong>Publish</strong>:</li>
+          <li>Buka <strong>console.firebase.google.com</strong> → <strong>Add project</strong> → beri nama bebas → selesaikan.</li>
+          <li>Menu kiri → <strong>Build → Firestore Database → Create database</strong>. Pilih lokasi (mis. asia-southeast2), mode <strong>production</strong>.</li>
+          <li>Tab <strong>Rules</strong> pada Firestore, ganti isinya dengan aturan berikut (mendukung mode privat maupun publik per buku besar), klik <strong>Publish</strong>:</li>
         </ol>
         <div class="code-line" id="rulesText"></div>
         <ol start="4">
-          <li>Masuk ke <strong>Build → Authentication → Get started</strong>. Di tab <strong>Sign-in method</strong>, aktifkan provider <strong>Google</strong>.</li>
-          <li>Klik ikon ⚙ (Project settings) di pojok kiri atas → scroll ke bawah ke bagian <strong>Your apps</strong> → klik ikon <strong>Web (&lt;/&gt;)</strong> untuk mendaftarkan aplikasi web baru → beri nama bebas → <strong>Register app</strong>.</li>
-          <li>Firebase akan menampilkan kode <code>const firebaseConfig = {...}</code>. Salin seluruh kode itu, tempel ke kotak di atas, lalu klik <strong>Simpan konfigurasi</strong>.</li>
-          <li>Klik <strong>Masuk dengan Google</strong>. Selesai — data otomatis tersinkron di semua perangkat yang login dengan akun Google yang sama.</li>
+          <li>Menu kiri → <strong>Build → Authentication → Get started</strong> → tab <strong>Sign-in method</strong> → aktifkan provider <strong>Google</strong> (isi Project support email) → Save.</li>
+          <li>Masih di Authentication → tab <strong>Settings → Authorized domains</strong> → tambahkan domain GitHub Pages Anda (mis. <code id="originHint"></code>).</li>
+          <li>Ikon ⚙ Project settings → bagian <strong>Your apps</strong> → ikon Web (&lt;/&gt;) → Register app → salin kode <code>firebaseConfig</code> yang muncul.</li>
+          <li>Tempel kode itu ke kotak di atas → <strong>Simpan konfigurasi</strong> → klik <strong>Masuk dengan Google</strong> di pojok kanan atas.</li>
+          <li>Untuk fitur link publik, tempel juga config yang sama ke variabel <code>BAKED_FIREBASE_CONFIG</code> di kode sumber (lihat catatan di atas).</li>
         </ol>
-        <div class="note">Gratis selamanya selama pemakaian di bawah kuota harian (20.000 penulisan/hari, 1GB penyimpanan) — jauh di atas kebutuhan pencatatan pribadi maupun kelompok kecil.</div>
+        <div class="note">Gratis selamanya di bawah kuota harian Firestore (20.000 penulisan/hari, 1GB penyimpanan) — jauh di atas kebutuhan pemakaian pribadi/kelompok kecil.</div>
       </div>
     </div>
   </section>
 
+</div>
+
+<!-- ================= PUBLIC READ-ONLY VIEW ================= -->
+<div class="app" id="publicView" style="display:none;">
+  <header class="top">
+    <div class="brand">
+      <img id="pubLogo" alt="" style="display:none;">
+      <h1 id="pubName">Buku Besar</h1>
+      <span class="tag">Laporan publik</span>
+    </div>
+    <div><span class="sync-pill sync-on"><span class="dot"></span>Live</span></div>
+  </header>
+  <div id="pubContent">
+    <div class="cards" style="margin-bottom:16px;">
+      <div class="card income"><div class="label">Pemasukan</div><div class="value mono" id="pubIncome">Rp 0</div></div>
+      <div class="card expense"><div class="label">Pengeluaran</div><div class="value mono" id="pubExpense">Rp 0</div></div>
+      <div class="card"><div class="label">Saldo</div><div class="value mono" id="pubBalance">Rp 0</div></div>
+    </div>
+    <div class="panel">
+      <h2>Transaksi</h2>
+      <table><thead><tr><th>Tanggal</th><th>Tipe</th><th>Kategori</th><th>Catatan</th><th style="text-align:right">Jumlah</th></tr></thead><tbody id="pubBody"></tbody></table>
+      <div class="empty" id="pubEmpty" style="display:none;">Belum ada transaksi.</div>
+    </div>
+  </div>
+  <div class="empty" id="pubMissing" style="display:none;">Laporan tidak ditemukan, atau pemiliknya sudah menjadikannya privat kembali.</div>
+  <div class="note" style="text-align:center;">Laporan ini <strong>read-only</strong> dan diperbarui otomatis secara live. Ingin buat pencatatan sendiri? <a href="./" style="color:var(--accent);">Buka Buku Besar</a></div>
+</div>
+
+<div id="photoModal" style="display:none;position:fixed;inset:0;background:rgba(10,14,26,.82);z-index:999;align-items:center;justify-content:center;padding:20px;">
+  <img id="photoModalImg" style="max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.4);">
 </div>
 
 <script type="module">
@@ -290,19 +358,72 @@ const firebaseConfig = {
   import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+  // Setelah setup Firebase, ganti null di bawah ini dengan config Anda supaya link laporan
+  // publik bisa dibuka siapa saja tanpa perlu login/setup. Lihat panduan di tab Pengaturan.
+  const BAKED_FIREBASE_CONFIG = null;
+
   const RULES_TEXT = `rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    match /users/{userId}/ledgers/{ledgerId} {
+      allow read: if (resource.data.public == true) ||
+                     (request.auth != null && request.auth.uid == userId);
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }`;
   document.getElementById('rulesText').textContent = RULES_TEXT;
+  document.getElementById('originHint').textContent = window.location.hostname;
 
   const fmt = n => 'Rp ' + Math.round(n).toLocaleString('id-ID');
   const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 
+  // ============ PUBLIC VIEW MODE ============
+  const params = new URLSearchParams(window.location.search);
+  const pubU = params.get('u'), pubL = params.get('l');
+  if(pubU && pubL){
+    document.getElementById('mainApp').style.display = 'none';
+    document.getElementById('publicView').style.display = 'block';
+    if(!BAKED_FIREBASE_CONFIG){
+      document.getElementById('pubContent').style.display = 'none';
+      document.getElementById('pubMissing').style.display = 'block';
+      document.getElementById('pubMissing').textContent = 'Pemilik belum mengaktifkan fitur link publik.';
+    } else {
+      const app = initializeApp(BAKED_FIREBASE_CONFIG);
+      const db = getFirestore(app);
+      onSnapshot(doc(db,'users',pubU,'ledgers',pubL), (snap)=>{
+        if(!snap.exists() || snap.data().public !== true){
+          document.getElementById('pubContent').style.display = 'none';
+          document.getElementById('pubMissing').style.display = 'block';
+          return;
+        }
+        document.getElementById('pubContent').style.display = 'block';
+        document.getElementById('pubMissing').style.display = 'none';
+        const l = snap.data();
+        document.getElementById('pubName').textContent = l.name || 'Buku Besar';
+        document.title = (l.name||'Buku Besar') + ' — Laporan Publik';
+        document.documentElement.style.setProperty('--accent', l.accent || '#2451B8');
+        const logoEl = document.getElementById('pubLogo');
+        if(l.logo){ logoEl.src = l.logo; logoEl.style.display='inline-block'; } else { logoEl.style.display='none'; }
+        const tx = l.transactions || [];
+        const income = tx.filter(t=>t.type==='in').reduce((a,t)=>a+t.amount,0);
+        const expense = tx.filter(t=>t.type==='out').reduce((a,t)=>a+t.amount,0);
+        document.getElementById('pubIncome').textContent = fmt(income);
+        document.getElementById('pubExpense').textContent = fmt(expense);
+        document.getElementById('pubBalance').textContent = fmt(income-expense);
+        const body = document.getElementById('pubBody'); body.innerHTML = '';
+        [...tx].sort((a,b)=>b.date.localeCompare(a.date)).forEach(t=>{
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${t.date}</td><td>${t.type==='in'?'Pemasukan':'Pengeluaran'}</td><td><span class="tag-pill">${t.category||'-'}</span></td><td>${t.note||''}</td><td class="num ${t.type==='in'?'amt-in':'amt-out'}">${fmt(t.amount)}</td>`;
+          body.appendChild(tr);
+        });
+        document.getElementById('pubEmpty').style.display = tx.length ? 'none' : 'block';
+      });
+    }
+    // stop here — don't run the main app logic below
+  } else {
+
+  // ============ MAIN APP MODE ============
   let ledgers = [];
   let activeLedgerId = null;
   let fbApp=null, fbAuth=null, fbDb=null, currentUser=null, unsubscribe=null;
@@ -310,10 +431,9 @@ service cloud.firestore {
 
   function activeLedger(){ return ledgers.find(l=>l.id===activeLedgerId) || ledgers[0]; }
 
-  // ---------- local cache (per-device, offline fallback) ----------
   function loadLocal(){
     try{ ledgers = JSON.parse(localStorage.getItem('bb_ledgers')) || []; }catch(e){ ledgers = []; }
-    if(!ledgers.length) ledgers = [{ id: uid(), name:'Buku Besar', logo:null, accent:'#2451B8', transactions:[] }];
+    if(!ledgers.length) ledgers = [{ id: uid(), name:'Buku Besar', logo:null, accent:'#2451B8', public:false, transactions:[] }];
     activeLedgerId = localStorage.getItem('bb_active') || ledgers[0].id;
     if(!ledgers.find(l=>l.id===activeLedgerId)) activeLedgerId = ledgers[0].id;
   }
@@ -321,7 +441,6 @@ service cloud.firestore {
     try{ localStorage.setItem('bb_ledgers', JSON.stringify(ledgers)); localStorage.setItem('bb_active', activeLedgerId); }catch(e){}
   }
 
-  // ---------- tabs ----------
   document.querySelectorAll('nav.tabs button').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
@@ -332,6 +451,12 @@ service cloud.firestore {
   });
 
   function categories(){ return [...new Set(activeLedger().transactions.map(t=>t.category).filter(Boolean))]; }
+  function normalizeCategory(input){
+    const trimmed = input.trim().replace(/\s+/g,' ');
+    if(!trimmed) return '';
+    const match = categories().find(c => c.toLowerCase() === trimmed.toLowerCase());
+    return match || trimmed;
+  }
 
   function hexToSoft(hex){
     try{ const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16); return `rgba(${r},${g},${b},0.12)`; }catch(e){ return '#E9EFFB'; }
@@ -353,15 +478,11 @@ service cloud.firestore {
 
   function persistLedger(l){
     saveLocal();
-    if(currentUser && fbDb){
-      setDoc(doc(fbDb, 'users', currentUser.uid, 'ledgers', l.id), l).catch(()=>setStatus('Gagal menyimpan, akan dicoba lagi.'));
-    }
+    if(currentUser && fbDb) setDoc(doc(fbDb, 'users', currentUser.uid, 'ledgers', l.id), l).catch(()=>setStatus('Gagal menyimpan, akan dicoba lagi.'));
   }
   function persistDeleteLedger(id){
     saveLocal();
-    if(currentUser && fbDb){
-      deleteDoc(doc(fbDb, 'users', currentUser.uid, 'ledgers', id)).catch(()=>{});
-    }
+    if(currentUser && fbDb) deleteDoc(doc(fbDb, 'users', currentUser.uid, 'ledgers', id)).catch(()=>{});
   }
 
   document.getElementById('btnSaveBranding').addEventListener('click', ()=>{
@@ -380,6 +501,10 @@ service cloud.firestore {
     const l = activeLedger(); l.logo = null; applyBranding(); persistLedger(l);
   });
 
+  function shareUrlFor(l){
+    return `${window.location.origin}${window.location.pathname}?u=${currentUser.uid}&l=${l.id}`;
+  }
+
   function renderLedgerSelect(){
     document.getElementById('ledgerSelect').innerHTML = ledgers.map(l=>`<option value="${l.id}" ${l.id===activeLedgerId?'selected':''}>${l.name}</option>`).join('');
   }
@@ -388,14 +513,34 @@ service cloud.firestore {
     body.innerHTML = '';
     ledgers.forEach(l=>{
       const tr = document.createElement('tr');
+      const statusCell = l.public
+        ? `<span class="tag-pill" style="background:var(--income-soft);color:#0b6b4a;">Publik</span><div class="share-link">${currentUser ? shareUrlFor(l) : '(masuk dulu untuk lihat link)'}</div>`
+        : `<span class="tag-pill">Privat</span>`;
       tr.innerHTML = `<td>${l.name}${l.id===activeLedgerId ? ' <span class="tag-pill">Aktif</span>' : ''}</td>
+        <td>${statusCell}</td>
         <td class="row-actions">
-          ${l.id!==activeLedgerId ? `<button data-switch="${l.id}">Pindah ke sini</button>` : ''}
+          ${l.id!==activeLedgerId ? `<button data-switch="${l.id}">Pindah</button>` : ''}
+          <button class="btn ghost sm" data-togglepublic="${l.id}">${l.public ? 'Jadikan privat' : 'Jadikan publik'}</button>
+          ${l.public && currentUser ? `<button class="btn ghost sm" data-copy="${l.id}">Salin link</button>` : ''}
           <button data-remove="${l.id}" ${ledgers.length<=1?'disabled':''}>Hapus</button>
         </td>`;
       body.appendChild(tr);
     });
     body.querySelectorAll('[data-switch]').forEach(b=> b.addEventListener('click', ()=> switchLedger(b.dataset.switch)));
+    body.querySelectorAll('[data-togglepublic]').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        const l = ledgers.find(x=>x.id===b.dataset.togglepublic);
+        l.public = !l.public;
+        renderLedgerList(); persistLedger(l);
+      });
+    });
+    body.querySelectorAll('[data-copy]').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        const l = ledgers.find(x=>x.id===b.dataset.copy);
+        navigator.clipboard.writeText(shareUrlFor(l));
+        b.textContent = 'Tersalin!'; setTimeout(()=>{ b.textContent='Salin link'; }, 1500);
+      });
+    });
     body.querySelectorAll('[data-remove]').forEach(b=>{
       b.addEventListener('click', ()=>{
         if(ledgers.length<=1) return;
@@ -413,7 +558,7 @@ service cloud.firestore {
   document.getElementById('btnNewLedger').addEventListener('click', ()=>{
     const name = prompt('Nama buku besar baru (mis. nama kelompok/unit):', 'Buku Besar Baru');
     if(!name) return;
-    const l = { id: uid(), name: name.trim(), logo:null, accent:'#2451B8', transactions:[] };
+    const l = { id: uid(), name: name.trim(), logo:null, accent:'#2451B8', public:false, transactions:[] };
     ledgers.push(l); activeLedgerId = l.id;
     saveLocal(); refreshEverything(); persistLedger(l);
   });
@@ -466,14 +611,31 @@ service cloud.firestore {
     sorted.forEach(t=>{
       const tr = document.createElement('tr');
       tr.innerHTML = `<td>${t.date}</td><td>${t.type==='in'?'Pemasukan':'Pengeluaran'}</td><td><span class="tag-pill">${t.category||'-'}</span></td><td>${t.note||''}</td>
-        <td class="num ${t.type==='in'?'amt-in':'amt-out'}">${fmt(t.amount)}</td><td class="row-actions"><button data-del="${t.id}">Hapus</button></td>`;
+        <td class="num ${t.type==='in'?'amt-in':'amt-out'}">${fmt(t.amount)}</td><td class="row-actions">${t.photo?`<button data-viewphoto="${t.id}">📎 Nota</button>`:''}<button data-edit="${t.id}">Ubah</button><button data-del="${t.id}">Hapus</button></td>`;
       body.appendChild(tr);
     });
     document.getElementById('txEmpty').style.display = sorted.length ? 'none' : 'block';
+    body.querySelectorAll('[data-viewphoto]').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        const t = activeLedger().transactions.find(x=>x.id===b.dataset.viewphoto);
+        if(!t || !t.photo) return;
+        document.getElementById('photoModalImg').src = t.photo;
+        document.getElementById('photoModal').style.display = 'flex';
+      });
+    });
+    body.querySelectorAll('[data-edit]').forEach(b=> b.addEventListener('click', ()=> startEditTx(b.dataset.edit)));
     body.querySelectorAll('[data-del]').forEach(b=> b.addEventListener('click', ()=>{
       const l = activeLedger();
-      l.transactions = l.transactions.filter(t=>t.id !== b.dataset.del);
+      const id = b.dataset.del;
+      const removed = l.transactions.find(t=>t.id===id);
+      l.transactions = l.transactions.filter(t=>t.id !== id);
       refreshEverything(); persistLedger(l);
+      if(removed){
+        showToast('Dihapus: ' + fmt(removed.amount) + ' · ' + (removed.category||'-'), ()=>{
+          l.transactions.push(removed);
+          refreshEverything(); persistLedger(l);
+        });
+      }
     }));
   }
 
@@ -481,18 +643,175 @@ service cloud.firestore {
     const sel = document.getElementById('repCategory'); const current = sel.value;
     sel.innerHTML = '<option value="">Semua kategori</option>' + categories().map(c=>`<option value="${c}">${c}</option>`).join('');
     sel.value = current;
+    const dl = document.getElementById('categoryList');
+    if(dl) dl.innerHTML = categories().map(c=>`<option value="${c}"></option>`).join('');
+  }
+
+  document.getElementById('photoModal').addEventListener('click', ()=>{ document.getElementById('photoModal').style.display = 'none'; });
+
+  let pendingReceiptDataUrl = null;
+
+  function compressImage(file, maxW, quality){
+    return new Promise((resolve, reject)=>{
+      const img = new Image();
+      const reader = new FileReader();
+      reader.onload = ()=>{ img.onload = ()=>{
+        const scale = Math.min(1, maxW / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * scale; canvas.height = img.height * scale;
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      }; img.onerror = reject; img.src = reader.result; };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function parseNum(s){ return parseInt(s.replace(/[.,]/g,''), 10); }
+  function parseReceiptText(text){
+    const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+    const numRe = /(\d{1,3}(?:[.,]\d{3})+|\d{4,})/g;
+    const keywordRe = /(grand\s*total|total|jumlah|bayar)/i;
+    let candidates = [];
+    lines.forEach(line=>{
+      if(keywordRe.test(line) && !/subtotal/i.test(line)){
+        const nums = line.match(numRe);
+        if(nums) nums.forEach(n=> candidates.push(parseNum(n)));
+      }
+    });
+    let amount = candidates.length ? Math.max(...candidates) : null;
+    if(!amount){
+      const allNums = (text.match(numRe)||[]).map(parseNum).filter(n=> n>100 && n<100000000);
+      if(allNums.length) amount = Math.max(...allNums);
+    }
+    let date = null;
+    const dm = text.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+    if(dm){
+      let [, d, m, y] = dm;
+      if(y.length===2) y = '20'+y;
+      d = d.padStart(2,'0'); m = m.padStart(2,'0');
+      if(+m>=1 && +m<=12 && +d>=1 && +d<=31) date = `${y}-${m}-${d}`;
+    }
+    const merchant = lines[0] ? lines[0].slice(0,40) : '';
+    return { amount, date, merchant };
+  }
+
+  document.getElementById('receiptInput').addEventListener('change', async (e)=>{
+    const file = e.target.files[0]; if(!file) return;
+    const status = document.getElementById('ocrStatus');
+    status.textContent = 'Memproses foto...';
+    try{
+      pendingReceiptDataUrl = await compressImage(file, 900, 0.6);
+      const preview = document.getElementById('receiptPreview');
+      preview.src = pendingReceiptDataUrl; preview.style.display = 'block';
+      document.getElementById('btnClearReceipt').style.display = 'inline-block';
+      status.textContent = 'Membaca isi nota, mohon tunggu...';
+      const { data:{ text } } = await Tesseract.recognize(pendingReceiptDataUrl, 'ind+eng');
+      const parsed = parseReceiptText(text);
+      if(parsed.amount){ document.getElementById('fAmount').value = parsed.amount; updateAmountPreview(); }
+      if(parsed.date) document.getElementById('fDate').value = parsed.date;
+      if(parsed.merchant && !document.getElementById('fNote').value) document.getElementById('fNote').value = parsed.merchant;
+      status.textContent = (parsed.amount || parsed.date)
+        ? 'Terbaca — periksa & lengkapi kategori sebelum menyimpan.'
+        : 'Tidak berhasil membaca angkanya, isi manual saja. Foto tetap tersimpan sebagai bukti.';
+    } catch(err){
+      status.textContent = 'Gagal memproses foto. Coba foto lebih terang/jelas, atau isi manual.';
+    }
+  });
+  document.getElementById('btnClearReceipt').addEventListener('click', ()=>{
+    pendingReceiptDataUrl = null;
+    document.getElementById('receiptInput').value = '';
+    document.getElementById('receiptPreview').style.display = 'none';
+    document.getElementById('btnClearReceipt').style.display = 'none';
+    document.getElementById('ocrStatus').textContent = '';
+  });
+
+  let editingTxId = null;
+  let lastAction = null; // {ledgerId, type:'add'|'edit', before, after}
+  let toastTimer = null;
+
+  function fillFormFromTx(t){
+    document.getElementById('fDate').value = t.date;
+    document.getElementById('fType').value = t.type;
+    document.getElementById('fCategory').value = t.category || '';
+    document.getElementById('fAmount').value = t.amount;
+    document.getElementById('fNote').value = t.note || '';
+    updateAmountPreview();
+  }
+  function resetForm(){
+    document.getElementById('fDate').valueAsDate = new Date();
+    document.getElementById('fType').value = 'in';
+    document.getElementById('fCategory').value = '';
+    document.getElementById('fAmount').value = '';
+    document.getElementById('fNote').value = '';
+    updateAmountPreview();
+  }
+  function startEditTx(id){
+    const t = activeLedger().transactions.find(x=>x.id===id);
+    if(!t) return;
+    editingTxId = id;
+    fillFormFromTx(t);
+    document.getElementById('btnAdd').textContent = 'Simpan perubahan';
+    document.getElementById('btnCancelEdit').style.display = 'inline-block';
+    document.querySelector('#view-transaksi .panel h2').scrollIntoView({behavior:'smooth', block:'start'});
+  }
+  document.getElementById('btnCancelEdit').addEventListener('click', ()=>{
+    editingTxId = null;
+    resetForm();
+    document.getElementById('btnAdd').textContent = 'Tambah';
+    document.getElementById('btnCancelEdit').style.display = 'none';
+  });
+
+  function updateAmountPreview(){
+    const v = parseFloat(document.getElementById('fAmount').value);
+    document.getElementById('amountPreview').textContent = (v && v>0) ? fmt(v) : '';
+  }
+  document.getElementById('fAmount').addEventListener('input', updateAmountPreview);
+
+  function showToast(text, undoFn){
+    clearTimeout(toastTimer);
+    const toast = document.getElementById('txToast');
+    document.getElementById('txToastText').textContent = text;
+    toast.style.display = 'flex';
+    const btn = document.getElementById('btnUndoTx');
+    const newBtn = btn.cloneNode(true); btn.parentNode.replaceChild(newBtn, btn);
+    newBtn.addEventListener('click', ()=>{ undoFn(); toast.style.display='none'; clearTimeout(toastTimer); });
+    toastTimer = setTimeout(()=>{ toast.style.display = 'none'; }, 8000);
   }
 
   document.getElementById('btnAdd').addEventListener('click', ()=>{
     const date = document.getElementById('fDate').value;
     const type = document.getElementById('fType').value;
-    const category = document.getElementById('fCategory').value.trim();
+    const category = normalizeCategory(document.getElementById('fCategory').value);
     const amount = parseFloat(document.getElementById('fAmount').value);
     const note = document.getElementById('fNote').value.trim();
     if(!date || !amount || amount<=0){ alert('Isi tanggal dan jumlah dengan benar.'); return; }
     const l = activeLedger();
-    l.transactions.push({ id: uid(), date, type, category, amount, note });
-    document.getElementById('fCategory').value=''; document.getElementById('fAmount').value=''; document.getElementById('fNote').value='';
+
+    if(editingTxId){
+      const idx = l.transactions.findIndex(x=>x.id===editingTxId);
+      if(idx>-1){
+        const before = { ...l.transactions[idx] };
+        l.transactions[idx] = { ...before, date, type, category, amount, note, photo: pendingReceiptDataUrl || before.photo || null };
+        showToast('Perubahan disimpan: ' + fmt(amount) + ' · ' + (category||'-'), ()=>{
+          const i2 = l.transactions.findIndex(x=>x.id===before.id);
+          if(i2>-1) l.transactions[i2] = before;
+          refreshEverything(); persistLedger(l);
+        });
+      }
+      editingTxId = null;
+      document.getElementById('btnAdd').textContent = 'Tambah';
+      document.getElementById('btnCancelEdit').style.display = 'none';
+    } else {
+      const newTx = { id: uid(), date, type, category, amount, note, photo: pendingReceiptDataUrl || null };
+      l.transactions.push(newTx);
+      showToast('Ditambahkan: ' + fmt(amount) + ' · ' + (category||'-'), ()=>{
+        l.transactions = l.transactions.filter(x=>x.id !== newTx.id);
+        refreshEverything(); persistLedger(l);
+      });
+    }
+    resetForm();
+    document.getElementById('btnClearReceipt').click();
     refreshEverything(); persistLedger(l);
   });
 
@@ -520,6 +839,62 @@ service cloud.firestore {
     document.getElementById('repEmpty').style.display = filtered.length ? 'none' : 'block';
   }
   document.getElementById('btnPrint').addEventListener('click', ()=>{ generateReport(); window.print(); });
+
+  async function buildReportPdf(){
+    generateReport();
+    const l = activeLedger();
+    const from = document.getElementById('repFrom').value, to = document.getElementById('repTo').value, cat = document.getElementById('repCategory').value;
+    let filtered = [...l.transactions];
+    if(from) filtered = filtered.filter(t=>t.date >= from);
+    if(to) filtered = filtered.filter(t=>t.date <= to);
+    if(cat) filtered = filtered.filter(t=>t.category === cat);
+    filtered.sort((a,b)=>a.date.localeCompare(b.date));
+    const income = filtered.filter(t=>t.type==='in').reduce((a,t)=>a+t.amount,0);
+    const expense = filtered.filter(t=>t.type==='out').reduce((a,t)=>a+t.amount,0);
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF();
+    pdf.setFont('helvetica','bold'); pdf.setFontSize(16);
+    pdf.text(l.name || 'Buku Besar', 14, 18);
+    pdf.setFont('helvetica','normal'); pdf.setFontSize(10); pdf.setTextColor(90);
+    pdf.text(`Periode: ${from||'awal'} s/d ${to||'sekarang'}${cat ? ' · Kategori: '+cat : ''}`, 14, 25);
+    pdf.setTextColor(20); pdf.setFontSize(11);
+    pdf.text(`Pemasukan: ${fmt(income)}`, 14, 34);
+    pdf.text(`Pengeluaran: ${fmt(expense)}`, 14, 40);
+    pdf.setFont('helvetica','bold');
+    pdf.text(`Saldo periode: ${fmt(income-expense)}`, 14, 46);
+    pdf.autoTable({
+      startY: 54,
+      head: [['Tanggal','Tipe','Kategori','Catatan','Jumlah']],
+      body: filtered.map(t=>[t.date, t.type==='in'?'Pemasukan':'Pengeluaran', t.category||'-', t.note||'', fmt(t.amount)]),
+      styles:{ fontSize:9 }, headStyles:{ fillColor:[19,27,46] }, columnStyles:{ 4:{ halign:'right' } }
+    });
+    return pdf;
+  }
+
+  document.getElementById('btnShare').addEventListener('click', async ()=>{
+    const btn = document.getElementById('btnShare');
+    btn.disabled = true; btn.textContent = 'Menyiapkan...';
+    try{
+      const pdf = await buildReportPdf();
+      const l = activeLedger();
+      const fileName = (l.name || 'buku-besar').replace(/[^a-z0-9]+/gi,'-').toLowerCase() + '-laporan.pdf';
+      const blob = pdf.output('blob');
+      const file = new File([blob], fileName, { type:'application/pdf' });
+      if(navigator.canShare && navigator.canShare({ files:[file] })){
+        await navigator.share({ files:[file], title: l.name || 'Buku Besar', text: 'Laporan keuangan ' + (l.name||'') });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = fileName; a.click();
+        URL.revokeObjectURL(url);
+        alert('Perangkat/browser ini belum mendukung share langsung, jadi PDF-nya sudah diunduh — silakan bagikan filenya secara manual.');
+      }
+    } catch(e){
+      if(e.name !== 'AbortError') alert('Gagal membuat laporan PDF.');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Share Laporan';
+    }
+  });
 
   // ---------- Firebase ----------
   function setStatus(msg){ document.getElementById('statusText').textContent = msg; }
@@ -558,9 +933,7 @@ service cloud.firestore {
           if(unsubscribe){ unsubscribe(); unsubscribe=null; }
         }
       });
-    }catch(e){
-      setStatus('Konfigurasi tidak valid, periksa kembali.');
-    }
+    }catch(e){ setStatus('Konfigurasi tidak valid, periksa kembali.'); }
   }
 
   function attachListener(userId){
@@ -568,7 +941,6 @@ service cloud.firestore {
     const ref = collection(fbDb, 'users', userId, 'ledgers');
     unsubscribe = onSnapshot(ref, (snap)=>{
       if(snap.empty){
-        // first time: push local ledgers up
         ledgers.forEach(l=> setDoc(doc(fbDb,'users',userId,'ledgers',l.id), l));
         return;
       }
@@ -579,9 +951,7 @@ service cloud.firestore {
       saveLocal();
       refreshEverything();
       setStatus('Tersinkron realtime · ' + new Date().toLocaleTimeString('id-ID'));
-    }, (err)=>{
-      setStatus('Gagal memuat data dari server.');
-    });
+    }, (err)=>{ setStatus('Gagal memuat data dari server.'); });
   }
 
   document.getElementById('btnSaveConfig').addEventListener('click', ()=>{
@@ -589,32 +959,31 @@ service cloud.firestore {
     if(!cfg || !cfg.apiKey){ alert('Konfigurasi tidak terbaca, pastikan Anda menempel kode firebaseConfig lengkap.'); return; }
     localStorage.setItem('bb_fbconfig', JSON.stringify(cfg));
     initFirebase(cfg);
-    setStatus('Konfigurasi disimpan. Klik "Masuk dengan Google".');
+    setStatus('Konfigurasi disimpan. Klik "Masuk dengan Google" di pojok kanan atas.');
   });
   document.getElementById('btnSignIn').addEventListener('click', async ()=>{
-    if(!fbAuth){ alert('Simpan konfigurasi Firebase terlebih dahulu.'); return; }
+    if(!fbAuth){ alert('Simpan konfigurasi Firebase terlebih dahulu di tab Pengaturan.'); return; }
     try{ await signInWithPopup(fbAuth, new GoogleAuthProvider()); }
     catch(e){ setStatus('Gagal masuk: ' + e.message); }
   });
-  document.getElementById('btnSignOut').addEventListener('click', async ()=>{
-    if(fbAuth) await signOut(fbAuth);
-  });
+  document.getElementById('btnSignOut').addEventListener('click', async ()=>{ if(fbAuth) await signOut(fbAuth); });
 
-  // ---------- init ----------
   (function init(){
     loadLocal();
     refreshEverything();
     document.getElementById('fDate').valueAsDate = new Date();
-    try{
-      const saved = JSON.parse(localStorage.getItem('bb_fbconfig'));
-      if(saved && saved.apiKey){
-        document.getElementById('configInput').value = 'const firebaseConfig = ' + JSON.stringify(saved, null, 2) + ';';
-        initFirebase(saved);
-      } else {
-        setSyncPill(false);
-      }
-    }catch(e){ setSyncPill(false); }
+    setSyncPill(false);
+    let cfg = BAKED_FIREBASE_CONFIG;
+    if(!cfg){
+      try{ cfg = JSON.parse(localStorage.getItem('bb_fbconfig')); }catch(e){ cfg = null; }
+    }
+    if(cfg && cfg.apiKey){
+      document.getElementById('configInput').value = 'const firebaseConfig = ' + JSON.stringify(cfg, null, 2) + ';';
+      initFirebase(cfg);
+    }
   })();
+
+  } // end main app mode
 </script>
 </body>
 </html>
