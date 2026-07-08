@@ -195,6 +195,7 @@
     <button data-tab="laporan">Laporan</button>
     <button data-tab="utang" id="tabUtang" style="display:none;">Utang-Piutang</button>
     <button data-tab="anggaran" id="tabAnggaran" style="display:none;">Anggaran</button>
+    <button data-tab="anggota" id="tabAnggota" style="display:none;">Anggota &amp; Iuran</button>
     <button data-tab="pengaturan">Pengaturan</button>
   </nav>
 
@@ -339,6 +340,34 @@
     </div>
   </section>
 
+  <!-- ANGGOTA & IURAN -->
+  <section class="view" id="view-anggota">
+    <div class="panel">
+      <h2>Daftar anggota</h2>
+      <div class="settings-row">
+        <input type="text" id="mName" placeholder="Nama anggota baru" style="flex:1;min-width:180px;">
+        <button class="btn" id="btnAddMember">Tambah anggota</button>
+      </div>
+      <table><thead><tr><th>Nama</th><th></th></tr></thead><tbody id="memberBody"></tbody></table>
+      <div class="empty" id="memberEmpty" style="display:none;">Belum ada anggota.</div>
+    </div>
+    <div class="panel">
+      <h2>Iuran per periode</h2>
+      <div class="settings-row">
+        <div class="field"><label>Periode</label><input type="month" id="duesPeriod"></div>
+        <div class="field"><label>Nominal default (Rp)</label><input type="number" id="duesDefaultAmount" placeholder="0" min="0"></div>
+        <button class="btn ghost" id="btnSaveDefaultAmount">Simpan nominal</button>
+      </div>
+      <div class="cards" style="margin-top:12px;">
+        <div class="card income"><div class="label">Terkumpul periode ini</div><div class="value mono" id="duesCollected">Rp 0</div></div>
+        <div class="card"><div class="label">Status bayar</div><div class="value mono" id="duesPaidCount">0 / 0</div></div>
+      </div>
+      <table><thead><tr><th>Nama</th><th>Status</th><th style="text-align:right">Jumlah</th><th></th></tr></thead>
+      <tbody id="duesBody"></tbody></table>
+      <div class="empty" id="duesEmpty" style="display:none;">Tambahkan anggota dulu di atas.</div>
+    </div>
+  </section>
+
   <!-- PENGATURAN -->
   <section class="view" id="view-pengaturan">
 
@@ -348,6 +377,7 @@
       <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:10px;">
         <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;"><input type="checkbox" id="featDebts"> Utang-Piutang</label>
         <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;"><input type="checkbox" id="featBudget"> Anggaran / Budget bulanan</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;"><input type="checkbox" id="featMembers"> Anggota &amp; Iuran</label>
       </div>
       <div class="note">Neraca &amp; rugi-laba formal, multi-mata uang, dan rekonsiliasi bank menyusul di update berikutnya — masing-masing butuh perubahan struktur data yang lebih besar.</div>
     </div>
@@ -665,7 +695,7 @@ service cloud.firestore {
     saveLocal(); refreshEverything(); persistLedger(l);
   });
 
-  function refreshEverything(){ applyBranding(); applyFeatureVisibility(); renderLedgerSelect(); renderLedgerList(); renderDashboard(); renderTxTable(); renderCategoryFilter(); renderDebts(); renderBudgets(); }
+  function refreshEverything(){ applyBranding(); applyFeatureVisibility(); renderLedgerSelect(); renderLedgerList(); renderDashboard(); renderTxTable(); renderCategoryFilter(); renderDebts(); renderBudgets(); renderMembers(); renderDuesTable(); }
 
   function renderDashboard(){
     const transactions = activeLedger().transactions;
@@ -762,19 +792,105 @@ service cloud.firestore {
     const l = activeLedger(); l.budgetEnabled = e.target.checked;
     applyFeatureVisibility(); persistLedger(l);
   });
+  document.getElementById('featMembers').addEventListener('change', (e)=>{
+    const l = activeLedger(); l.membersEnabled = e.target.checked;
+    applyFeatureVisibility(); persistLedger(l);
+  });
   function applyFeatureVisibility(){
     const l = activeLedger();
     document.getElementById('featDebts').checked = !!l.debtsEnabled;
     document.getElementById('featBudget').checked = !!l.budgetEnabled;
+    document.getElementById('featMembers').checked = !!l.membersEnabled;
     document.getElementById('tabUtang').style.display = l.debtsEnabled ? 'inline-block' : 'none';
     document.getElementById('tabAnggaran').style.display = l.budgetEnabled ? 'inline-block' : 'none';
-    if(!l.debtsEnabled && document.getElementById('tabUtang').classList.contains('active')){
-      document.querySelector('nav.tabs button[data-tab="dashboard"]').click();
-    }
-    if(!l.budgetEnabled && document.getElementById('tabAnggaran').classList.contains('active')){
-      document.querySelector('nav.tabs button[data-tab="dashboard"]').click();
-    }
+    document.getElementById('tabAnggota').style.display = l.membersEnabled ? 'inline-block' : 'none';
+    ['tabUtang','tabAnggaran','tabAnggota'].forEach((id, i)=>{
+      const enabled = [l.debtsEnabled, l.budgetEnabled, l.membersEnabled][i];
+      if(!enabled && document.getElementById(id).classList.contains('active')){
+        document.querySelector('nav.tabs button[data-tab="dashboard"]').click();
+      }
+    });
   }
+
+  function renderMembers(){
+    const l = activeLedger();
+    const members = l.members || [];
+    const body = document.getElementById('memberBody'); body.innerHTML = '';
+    members.forEach(m=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${m.name}</td><td class="row-actions"><button data-delmember="${m.id}">Hapus</button></td>`;
+      body.appendChild(tr);
+    });
+    document.getElementById('memberEmpty').style.display = members.length ? 'none' : 'block';
+    body.querySelectorAll('[data-delmember]').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        if(!confirm('Hapus anggota ini? Riwayat iuran yang sudah tercatat tidak akan ikut terhapus.')) return;
+        l.members = l.members.filter(x=>x.id!==b.dataset.delmember);
+        renderMembers(); renderDuesTable(); persistLedger(l);
+      });
+    });
+  }
+  document.getElementById('btnAddMember').addEventListener('click', ()=>{
+    const name = document.getElementById('mName').value.trim();
+    if(!name) return;
+    const l = activeLedger();
+    l.members = l.members || [];
+    l.members.push({ id: uid(), name });
+    document.getElementById('mName').value = '';
+    renderMembers(); renderDuesTable(); persistLedger(l);
+  });
+
+  function currentPeriod(){ return document.getElementById('duesPeriod').value || new Date().toISOString().slice(0,7); }
+
+  function renderDuesTable(){
+    const l = activeLedger();
+    const members = l.members || [];
+    l.duesRecords = l.duesRecords || [];
+    document.getElementById('duesDefaultAmount').value = l.duesAmount || '';
+    const period = currentPeriod();
+    const body = document.getElementById('duesBody'); body.innerHTML = '';
+    let collected = 0, paidCount = 0;
+    members.forEach(m=>{
+      const rec = l.duesRecords.find(r=>r.memberId===m.id && r.period===period);
+      if(rec){ collected += rec.amount; paidCount++; }
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${m.name}</td>
+        <td><span class="tag-pill" style="${rec?'background:var(--income-soft);color:#0b6b4a;':''}">${rec?'Sudah bayar':'Belum bayar'}</span></td>
+        <td class="num">${rec?fmt(rec.amount):'-'}</td>
+        <td class="row-actions"><button data-toggledues="${m.id}">${rec?'Batalkan':'Tandai lunas'}</button></td>`;
+      body.appendChild(tr);
+    });
+    document.getElementById('duesEmpty').style.display = members.length ? 'none' : 'block';
+    document.getElementById('duesCollected').textContent = fmt(collected);
+    document.getElementById('duesPaidCount').textContent = paidCount + ' / ' + members.length;
+    body.querySelectorAll('[data-toggledues]').forEach(b=>{
+      b.addEventListener('click', ()=> toggleDues(b.dataset.toggledues));
+    });
+  }
+
+  function toggleDues(memberId){
+    const l = activeLedger();
+    const period = currentPeriod();
+    const member = l.members.find(m=>m.id===memberId);
+    const existing = l.duesRecords.find(r=>r.memberId===memberId && r.period===period);
+    if(existing){
+      l.transactions = l.transactions.filter(t=>t.id !== existing.txId);
+      l.duesRecords = l.duesRecords.filter(r=>r !== existing);
+    } else {
+      const amount = parseFloat(document.getElementById('duesDefaultAmount').value) || l.duesAmount || 0;
+      if(!amount){ alert('Isi nominal default iuran dulu.'); return; }
+      const tx = { id: uid(), date: new Date().toISOString().slice(0,10), type:'in', category:'Iuran', note: `${member.name} - ${period}`, amount };
+      l.transactions.push(tx);
+      l.duesRecords.push({ id: uid(), memberId, period, amount, txId: tx.id });
+    }
+    refreshEverything(); persistLedger(l);
+  }
+  document.getElementById('duesPeriod').addEventListener('change', renderDuesTable);
+  document.getElementById('btnSaveDefaultAmount').addEventListener('click', ()=>{
+    const l = activeLedger();
+    l.duesAmount = parseFloat(document.getElementById('duesDefaultAmount').value) || 0;
+    persistLedger(l);
+  });
 
   function renderDebts(){
     const l = activeLedger();
@@ -1220,6 +1336,7 @@ service cloud.firestore {
     loadLocal();
     refreshEverything();
     document.getElementById('fDate').valueAsDate = new Date();
+    document.getElementById('duesPeriod').value = new Date().toISOString().slice(0,7);
     setSyncPill(false);
     let cfg = BAKED_FIREBASE_CONFIG;
     if(!cfg){
