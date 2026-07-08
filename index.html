@@ -385,7 +385,14 @@ const firebaseConfig = {
 
   // Setelah setup Firebase, ganti null di bawah ini dengan config Anda supaya link laporan
   // publik bisa dibuka siapa saja tanpa perlu login/setup. Lihat panduan di tab Pengaturan.
-  const BAKED_FIREBASE_CONFIG = null;
+  const BAKED_FIREBASE_CONFIG = {
+    apiKey: "AIzaSyDv02Q8BiT9GtHYAGo6m7sl-ncn4sbWMXA",
+    authDomain: "buku-besar-44e5f.firebaseapp.com",
+    projectId: "buku-besar-44e5f",
+    storageBucket: "buku-besar-44e5f.firebasestorage.app",
+    messagingSenderId: "488658792783",
+    appId: "1:488658792783:web:f3cc878a1a580fbdf4d53a"
+  };
 
   const RULES_TEXT = `rules_version = '2';
 service cloud.firestore {
