@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Buku Besar — Pencatat Keuangan</title>
+<link rel="icon" type="image/png" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#131B2E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -17,18 +21,23 @@
     --accent:#2451B8; --accent-soft:#E9EFFB;
   }
   *{box-sizing:border-box;}
+  html, body{overflow-x:hidden; max-width:100%;}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;font-size:14px;-webkit-font-smoothing:antialiased;}
   .mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;}
-  .app{max-width:1080px;margin:0 auto;padding:28px 20px 80px;}
+  .app{max-width:1080px;margin:0 auto;padding:0 20px 100px;}
 
-  header.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:12px;}
-  header.top .brand{display:flex;align-items:center;gap:10px;}
-  header.top .brand img{height:30px;width:30px;object-fit:cover;border-radius:7px;}
-  header.top h1{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;margin:0;letter-spacing:-0.01em;}
-  header.top .tag{font-size:12px;color:var(--ink-soft);border-left:1px solid var(--rule);padding-left:10px;}
-  .header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
-  .ledger-switch{display:flex;align-items:center;gap:6px;}
-  .ledger-switch select{font-family:'Inter',sans-serif;font-size:13px;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;background:#fff;}
+  header.top{
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+    background:var(--ink);color:#fff;margin:0 -20px 22px;padding:18px 20px;
+    border-bottom:3px solid var(--accent);
+  }
+  header.top .brand{display:flex;align-items:center;gap:10px;min-width:0;}
+  header.top .brand img{height:34px;width:34px;object-fit:cover;border-radius:8px;flex-shrink:0;}
+  header.top h1{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;margin:0;letter-spacing:-0.01em;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  header.top .tag{font-size:12px;color:#B9C0CE;border-left:1px solid #384158;padding-left:10px;white-space:nowrap;}
+  .header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0;}
+  .ledger-switch{display:flex;align-items:center;gap:6px;min-width:0;}
+  .ledger-switch select{font-family:'Inter',sans-serif;font-size:13px;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;background:#fff;max-width:100%;}
   .sync-pill{font-size:11.5px;padding:5px 10px;border-radius:20px;display:inline-flex;align-items:center;gap:6px;font-weight:500;}
   .sync-pill .dot{width:7px;height:7px;border-radius:50%;}
   .sync-on{background:var(--income-soft);color:#0b6b4a;}
@@ -36,7 +45,10 @@
   .sync-off{background:#F0F1F3;color:var(--ink-soft);}
   .sync-off .dot{background:#B7BCC5;}
 
-  nav.tabs{display:flex;gap:4px;border-bottom:1px solid var(--rule);margin-bottom:24px;}
+  nav.tabs{
+    display:flex;gap:4px;border-bottom:1px solid var(--rule);margin-bottom:24px;
+    position:sticky;top:0;z-index:40;background:var(--bg);padding-top:6px;
+  }
   nav.tabs button{font-family:'Space Grotesk',sans-serif;font-size:13.5px;font-weight:600;color:var(--ink-soft);background:none;border:none;padding:10px 4px;margin-right:22px;cursor:pointer;border-bottom:2px solid transparent;position:relative;top:1px;}
   nav.tabs button.active{color:var(--ink);border-bottom-color:var(--ink);}
 
@@ -72,7 +84,9 @@
   .form-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;align-items:end;margin-bottom:8px;}
   .field{display:flex;flex-direction:column;gap:5px;}
   .field label{font-size:11.5px;color:var(--ink-soft);font-weight:500;}
-  .field input, .field select, .field textarea{font-family:'Inter',sans-serif;font-size:13.5px;padding:8px 10px;border:1px solid var(--rule);border-radius:6px;background:#FBFBFC;color:var(--ink);}
+  .field input, .field select, .field textarea{font-family:'Inter',sans-serif;font-size:13.5px;padding:8px 10px;border:1px solid var(--rule);border-radius:6px;background:#FBFBFC;color:var(--ink);width:100%;min-width:0;}
+  .form-grid > *, .filters > *, .cards > *, .settings-row > *{min-width:0;}
+  input[type=file]{max-width:100%;}
   .field input:focus, .field select:focus, .field textarea:focus{outline:2px solid var(--accent);outline-offset:1px;background:#fff;}
   .btn{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;padding:9px 16px;border-radius:7px;border:none;cursor:pointer;background:var(--ink);color:#fff;}
   .btn:hover{opacity:.88;}
@@ -102,6 +116,14 @@
   .user-chip{display:flex;align-items:center;gap:8px;font-size:13px;background:#F6F7F9;border:1px solid var(--rule);border-radius:20px;padding:5px 12px 5px 5px;}
   .user-chip img{width:22px;height:22px;border-radius:50%;}
   .share-link{font-size:11.5px;color:var(--accent);word-break:break-all;}
+
+  .fab{
+    position:fixed;right:20px;bottom:22px;z-index:60;
+    width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;border:none;
+    font-size:28px;line-height:1;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 6px 18px rgba(36,81,184,.4);cursor:pointer;
+  }
+  .fab:active{transform:scale(0.95);}
 
   @media (max-width:760px){
     .cards{grid-template-columns:1fr;}
@@ -189,7 +211,8 @@
       <h2>Scan nota (opsional)</h2>
       <p class="hint">Foto atau upload nota — sistem coba baca tanggal & totalnya otomatis, lalu foto notanya tersimpan sebagai bukti di transaksi ini. Selalu periksa hasilnya sebelum menyimpan, OCR bisa keliru.</p>
       <div class="settings-row">
-        <input type="file" accept="image/*" capture="environment" id="receiptInput">
+        <label class="btn ghost" style="cursor:pointer;">📷 Ambil foto<input type="file" accept="image/*" capture="environment" id="receiptInputCamera" style="display:none;"></label>
+        <label class="btn ghost" style="cursor:pointer;">🖼️ Pilih dari galeri<input type="file" accept="image/*" id="receiptInputGallery" style="display:none;"></label>
         <button class="btn ghost" id="btnClearReceipt" style="display:none;">Hapus foto</button>
       </div>
       <img id="receiptPreview" style="display:none;max-height:160px;border-radius:8px;margin-top:4px;border:1px solid var(--rule);">
@@ -349,6 +372,8 @@ const firebaseConfig = {
   <div class="note" style="text-align:center;">Laporan ini <strong>read-only</strong> dan diperbarui otomatis secara live. Ingin buat pencatatan sendiri? <a href="./" style="color:var(--accent);">Buka Buku Besar</a></div>
 </div>
 
+<button class="fab no-print" id="btnFab" title="Tambah transaksi" aria-label="Tambah transaksi">+</button>
+
 <div id="photoModal" style="display:none;position:fixed;inset:0;background:rgba(10,14,26,.82);z-index:999;align-items:center;justify-content:center;padding:20px;">
   <img id="photoModalImg" style="max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.4);">
 </div>
@@ -384,6 +409,7 @@ service cloud.firestore {
   if(pubU && pubL){
     document.getElementById('mainApp').style.display = 'none';
     document.getElementById('publicView').style.display = 'block';
+    document.getElementById('btnFab').style.display = 'none';
     if(!BAKED_FIREBASE_CONFIG){
       document.getElementById('pubContent').style.display = 'none';
       document.getElementById('pubMissing').style.display = 'block';
@@ -648,6 +674,14 @@ service cloud.firestore {
   }
 
   document.getElementById('photoModal').addEventListener('click', ()=>{ document.getElementById('photoModal').style.display = 'none'; });
+  document.getElementById('btnFab').addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    document.querySelector('nav.tabs button[data-tab="transaksi"]').classList.add('active');
+    document.getElementById('view-transaksi').classList.add('active');
+    window.scrollTo({top:0, behavior:'smooth'});
+    setTimeout(()=> document.getElementById('fAmount').focus(), 300);
+  });
 
   let pendingReceiptDataUrl = null;
 
@@ -696,8 +730,8 @@ service cloud.firestore {
     return { amount, date, merchant };
   }
 
-  document.getElementById('receiptInput').addEventListener('change', async (e)=>{
-    const file = e.target.files[0]; if(!file) return;
+  async function handleReceiptFile(file){
+    if(!file) return;
     const status = document.getElementById('ocrStatus');
     status.textContent = 'Memproses foto...';
     try{
@@ -717,10 +751,13 @@ service cloud.firestore {
     } catch(err){
       status.textContent = 'Gagal memproses foto. Coba foto lebih terang/jelas, atau isi manual.';
     }
-  });
+  }
+  document.getElementById('receiptInputCamera').addEventListener('change', (e)=> handleReceiptFile(e.target.files[0]));
+  document.getElementById('receiptInputGallery').addEventListener('change', (e)=> handleReceiptFile(e.target.files[0]));
   document.getElementById('btnClearReceipt').addEventListener('click', ()=>{
     pendingReceiptDataUrl = null;
-    document.getElementById('receiptInput').value = '';
+    document.getElementById('receiptInputCamera').value = '';
+    document.getElementById('receiptInputGallery').value = '';
     document.getElementById('receiptPreview').style.display = 'none';
     document.getElementById('btnClearReceipt').style.display = 'none';
     document.getElementById('ocrStatus').textContent = '';
