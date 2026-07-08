@@ -28,13 +28,13 @@
 
   header.top{
     display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
-    background:var(--accent);color:#fff;margin:0 -20px 22px;padding:18px 20px;
+    background:linear-gradient(135deg, var(--accent), var(--ink));color:#fff;margin:0 -20px 22px;padding:18px 20px;
     border-bottom:3px solid var(--ink);
   }
   header.top .brand{display:flex;align-items:center;gap:10px;min-width:0;}
   header.top .brand img{height:34px;width:34px;object-fit:cover;border-radius:8px;flex-shrink:0;}
   header.top h1{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;margin:0;letter-spacing:-0.01em;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  header.top .tag{font-size:12px;color:#B9C0CE;border-left:1px solid #384158;padding-left:10px;white-space:nowrap;}
+  header.top .tag{font-size:12px;color:rgba(255,255,255,.72);border-left:1px solid rgba(255,255,255,.25);padding-left:10px;white-space:nowrap;}
   .header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0;}
   .ledger-switch{display:flex;align-items:center;gap:6px;min-width:0;}
   .ledger-switch select{font-family:'Inter',sans-serif;font-size:13px;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;background:#fff;max-width:100%;}
@@ -99,7 +99,7 @@
   header.top .btn.secondary{background:#fff;color:var(--ink);}
   header.top .btn.ghost{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.55);}
   header.top .sync-off{background:rgba(255,255,255,.9);}
-  header.top .user-chip{background:rgba(255,255,255,.9);border-color:transparent;}
+  header.top .user-chip{background:rgba(255,255,255,.9);border-color:transparent;color:var(--ink);}
 
   .filters{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;margin-bottom:16px;}
   .empty{padding:26px;text-align:center;color:var(--ink-soft);font-size:13px;}
@@ -134,15 +134,18 @@
     .charts-row{grid-template-columns:1fr;}
     .form-grid{grid-template-columns:1fr 1fr;}
     .filters{grid-template-columns:1fr 1fr;}
-    header.top{flex-direction:column;align-items:stretch;}
-    header.top .brand{justify-content:center;text-align:center;}
+    header.top{align-items:center;}
+    header.top .brand{flex:1;min-width:0;}
     header.top .brand .tag{display:none;}
-    .header-right{flex-direction:column;align-items:stretch;}
+    .header-right{flex-direction:column;align-items:stretch;flex-basis:100%;}
     .header-right > *{width:100%;}
     .ledger-switch{width:100%;flex-direction:column;align-items:stretch;}
     .ledger-switch select{width:100%;}
     #userChipWrap, #syncPillWrap{display:flex;justify-content:center;}
     .btn{width:100%;text-align:center;}
+    #btnMenuToggle{display:block !important;width:44px;height:44px;flex:0 0 auto;font-size:18px;padding:0;}
+    .header-right{display:none;margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.2);gap:10px;}
+    .header-right.open{display:flex;}
     .panel{padding:16px;overflow-x:auto;}
     table{min-width:520px;}
     .code-line{font-size:10.5px;}
@@ -173,7 +176,7 @@
       <h1 id="brandName">Buku Besar</h1>
       <span class="tag">Pencatat keuangan pribadi</span>
     </div>
-    <div class="header-right no-print">
+    <div class="header-right no-print" id="headerRight">
       <div class="ledger-switch">
         <select id="ledgerSelect"></select>
         <button class="btn ghost" id="btnNewLedger">+ Buku baru</button>
@@ -183,6 +186,7 @@
       <button class="btn ghost" id="btnSignOut" style="display:none;">Keluar</button>
       <div id="syncPillWrap"></div>
     </div>
+    <button class="btn ghost no-print" id="btnMenuToggle" aria-label="Menu" style="display:none;">☰</button>
   </header>
 
   <nav class="tabs no-print">
@@ -685,6 +689,10 @@ service cloud.firestore {
     const dl = document.getElementById('categoryList');
     if(dl) dl.innerHTML = categories().map(c=>`<option value="${c}"></option>`).join('');
   }
+
+  document.getElementById('btnMenuToggle').addEventListener('click', ()=>{
+    document.getElementById('headerRight').classList.toggle('open');
+  });
 
   document.getElementById('photoModal').addEventListener('click', ()=>{ document.getElementById('photoModal').style.display = 'none'; });
   document.getElementById('btnFab').addEventListener('click', ()=>{
