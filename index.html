@@ -193,6 +193,8 @@
     <button data-tab="dashboard" class="active">Dashboard</button>
     <button data-tab="transaksi">Transaksi</button>
     <button data-tab="laporan">Laporan</button>
+    <button data-tab="utang" id="tabUtang" style="display:none;">Utang-Piutang</button>
+    <button data-tab="anggaran" id="tabAnggaran" style="display:none;">Anggaran</button>
     <button data-tab="pengaturan">Pengaturan</button>
   </nav>
 
@@ -290,8 +292,65 @@
     </div>
   </section>
 
+  <!-- UTANG-PIUTANG -->
+  <section class="view" id="view-utang">
+    <div class="cards">
+      <div class="card expense"><div class="label">Total utang saya (belum lunas)</div><div class="value mono" id="sumDebtOut">Rp 0</div></div>
+      <div class="card income"><div class="label">Total piutang saya (belum lunas)</div><div class="value mono" id="sumDebtIn">Rp 0</div></div>
+    </div>
+    <div class="panel">
+      <h2>Catat utang / piutang baru</h2>
+      <div class="form-grid">
+        <div class="field"><label>Tipe</label>
+          <select id="dType"><option value="utang">Utang saya (saya berutang)</option><option value="piutang">Piutang saya (org lain berutang ke saya)</option></select>
+        </div>
+        <div class="field"><label>Nama orang/pihak</label><input type="text" id="dPerson" placeholder="mis. Budi, Toko Sinar"></div>
+        <div class="field"><label>Jumlah (Rp)</label><input type="number" id="dAmount" placeholder="0" min="0"></div>
+        <div class="field"><label>Jatuh tempo (opsional)</label><input type="date" id="dDue"></div>
+      </div>
+      <div class="form-grid" style="margin-top:0;">
+        <div class="field" style="grid-column:1/4;"><label>Catatan (opsional)</label><input type="text" id="dNote" placeholder="Keterangan singkat"></div>
+        <button class="btn" id="btnAddDebt">Catat</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Daftar utang-piutang</h2>
+      <table><thead><tr><th>Tipe</th><th>Pihak</th><th>Jumlah</th><th>Jatuh tempo</th><th>Status</th><th></th></tr></thead>
+      <tbody id="debtBody"></tbody></table>
+      <div class="empty" id="debtEmpty" style="display:none;">Belum ada catatan utang-piutang.</div>
+    </div>
+  </section>
+
+  <!-- ANGGARAN -->
+  <section class="view" id="view-anggaran">
+    <div class="panel">
+      <h2>Atur anggaran bulanan per kategori</h2>
+      <p class="hint">Batas ini dicek terhadap pengeluaran bulan berjalan pada kategori yang sama.</p>
+      <div class="form-grid" style="grid-template-columns:2fr 1fr auto;">
+        <div class="field"><label>Kategori</label><input type="text" id="bCategory" list="categoryList" placeholder="mis. Makanan"></div>
+        <div class="field"><label>Batas per bulan (Rp)</label><input type="number" id="bLimit" placeholder="0" min="0"></div>
+        <button class="btn" id="btnSetBudget">Simpan</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Anggaran bulan ini</h2>
+      <div id="budgetList"></div>
+      <div class="empty" id="budgetEmpty" style="display:none;">Belum ada anggaran diatur.</div>
+    </div>
+  </section>
+
   <!-- PENGATURAN -->
   <section class="view" id="view-pengaturan">
+
+    <div class="panel">
+      <h2>Fitur lanjutan (khusus buku besar ini)</h2>
+      <p class="hint">Nyalakan hanya yang dibutuhkan — buku besar sederhana bisa dibiarkan tanpa fitur ini, buku besar usaha bisa nyalakan yang perlu.</p>
+      <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:10px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;"><input type="checkbox" id="featDebts"> Utang-Piutang</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;"><input type="checkbox" id="featBudget"> Anggaran / Budget bulanan</label>
+      </div>
+      <div class="note">Neraca &amp; rugi-laba formal, multi-mata uang, dan rekonsiliasi bank menyusul di update berikutnya — masing-masing butuh perubahan struktur data yang lebih besar.</div>
+    </div>
 
     <div class="panel">
       <h2>Branding buku besar ini</h2>
@@ -606,7 +665,7 @@ service cloud.firestore {
     saveLocal(); refreshEverything(); persistLedger(l);
   });
 
-  function refreshEverything(){ applyBranding(); renderLedgerSelect(); renderLedgerList(); renderDashboard(); renderTxTable(); renderCategoryFilter(); }
+  function refreshEverything(){ applyBranding(); applyFeatureVisibility(); renderLedgerSelect(); renderLedgerList(); renderDashboard(); renderTxTable(); renderCategoryFilter(); renderDebts(); renderBudgets(); }
 
   function renderDashboard(){
     const transactions = activeLedger().transactions;
@@ -695,6 +754,119 @@ service cloud.firestore {
   });
 
   document.getElementById('photoModal').addEventListener('click', ()=>{ document.getElementById('photoModal').style.display = 'none'; });
+  document.getElementById('featDebts').addEventListener('change', (e)=>{
+    const l = activeLedger(); l.debtsEnabled = e.target.checked;
+    applyFeatureVisibility(); persistLedger(l);
+  });
+  document.getElementById('featBudget').addEventListener('change', (e)=>{
+    const l = activeLedger(); l.budgetEnabled = e.target.checked;
+    applyFeatureVisibility(); persistLedger(l);
+  });
+  function applyFeatureVisibility(){
+    const l = activeLedger();
+    document.getElementById('featDebts').checked = !!l.debtsEnabled;
+    document.getElementById('featBudget').checked = !!l.budgetEnabled;
+    document.getElementById('tabUtang').style.display = l.debtsEnabled ? 'inline-block' : 'none';
+    document.getElementById('tabAnggaran').style.display = l.budgetEnabled ? 'inline-block' : 'none';
+    if(!l.debtsEnabled && document.getElementById('tabUtang').classList.contains('active')){
+      document.querySelector('nav.tabs button[data-tab="dashboard"]').click();
+    }
+    if(!l.budgetEnabled && document.getElementById('tabAnggaran').classList.contains('active')){
+      document.querySelector('nav.tabs button[data-tab="dashboard"]').click();
+    }
+  }
+
+  function renderDebts(){
+    const l = activeLedger();
+    const debts = l.debts || [];
+    const body = document.getElementById('debtBody'); body.innerHTML = '';
+    debts.forEach(d=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${d.type==='utang'?'Utang saya':'Piutang saya'}</td><td>${d.person}</td>
+        <td class="num">${fmt(d.amount)}</td><td>${d.due||'-'}</td>
+        <td><span class="tag-pill" style="${d.status==='lunas'?'background:var(--income-soft);color:#0b6b4a;':''}">${d.status==='lunas'?'Lunas':'Belum lunas'}</span></td>
+        <td class="row-actions"><button data-toggledebt="${d.id}">${d.status==='lunas'?'Tandai belum lunas':'Tandai lunas'}</button><button data-deldebt="${d.id}">Hapus</button></td>`;
+      body.appendChild(tr);
+    });
+    document.getElementById('debtEmpty').style.display = debts.length ? 'none' : 'block';
+    const utang = debts.filter(d=>d.type==='utang' && d.status!=='lunas').reduce((a,d)=>a+d.amount,0);
+    const piutang = debts.filter(d=>d.type==='piutang' && d.status!=='lunas').reduce((a,d)=>a+d.amount,0);
+    document.getElementById('sumDebtOut').textContent = fmt(utang);
+    document.getElementById('sumDebtIn').textContent = fmt(piutang);
+    body.querySelectorAll('[data-toggledebt]').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        const d = l.debts.find(x=>x.id===b.dataset.toggledebt);
+        d.status = d.status==='lunas' ? 'belum' : 'lunas';
+        renderDebts(); persistLedger(l);
+      });
+    });
+    body.querySelectorAll('[data-deldebt]').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        l.debts = l.debts.filter(x=>x.id!==b.dataset.deldebt);
+        renderDebts(); persistLedger(l);
+      });
+    });
+  }
+  document.getElementById('btnAddDebt').addEventListener('click', ()=>{
+    const type = document.getElementById('dType').value;
+    const person = document.getElementById('dPerson').value.trim();
+    const amount = parseFloat(document.getElementById('dAmount').value);
+    const due = document.getElementById('dDue').value;
+    const note = document.getElementById('dNote').value.trim();
+    if(!person || !amount || amount<=0){ alert('Isi nama pihak dan jumlah dengan benar.'); return; }
+    const l = activeLedger();
+    l.debts = l.debts || [];
+    l.debts.push({ id: uid(), type, person, amount, due, note, status:'belum' });
+    document.getElementById('dPerson').value=''; document.getElementById('dAmount').value=''; document.getElementById('dDue').value=''; document.getElementById('dNote').value='';
+    renderDebts(); persistLedger(l);
+  });
+
+  function renderBudgets(){
+    const l = activeLedger();
+    const budgets = l.budgets || [];
+    const thisMonth = new Date().toISOString().slice(0,7);
+    const spentByCat = {};
+    l.transactions.filter(t=>t.type==='out' && t.date.slice(0,7)===thisMonth).forEach(t=>{
+      spentByCat[t.category||'Lainnya'] = (spentByCat[t.category||'Lainnya']||0) + t.amount;
+    });
+    const listEl = document.getElementById('budgetList'); listEl.innerHTML = '';
+    budgets.forEach(b=>{
+      const spent = spentByCat[b.category] || 0;
+      const pct = Math.min(100, Math.round((spent / b.limit) * 100));
+      const over = spent > b.limit;
+      const row = document.createElement('div');
+      row.style.cssText = 'margin-bottom:16px;';
+      row.innerHTML = `
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+          <span><strong>${b.category}</strong></span>
+          <span class="${over?'amt-out':''}" style="${over?'':'color:var(--ink-soft)'}">${fmt(spent)} / ${fmt(b.limit)}</span>
+        </div>
+        <div style="background:var(--rule);border-radius:20px;height:8px;overflow:hidden;">
+          <div style="width:${pct}%;height:100%;background:${over?'var(--expense)':'var(--income)'};"></div>
+        </div>
+        <div style="text-align:right;margin-top:4px;"><button class="row-actions" data-delbudget="${b.category}" style="background:none;border:none;color:var(--ink-soft);font-size:11.5px;text-decoration:underline;cursor:pointer;">Hapus</button></div>`;
+      listEl.appendChild(row);
+    });
+    document.getElementById('budgetEmpty').style.display = budgets.length ? 'none' : 'block';
+    listEl.querySelectorAll('[data-delbudget]').forEach(b=>{
+      b.addEventListener('click', ()=>{
+        l.budgets = l.budgets.filter(x=>x.category!==b.dataset.delbudget);
+        renderBudgets(); persistLedger(l);
+      });
+    });
+  }
+  document.getElementById('btnSetBudget').addEventListener('click', ()=>{
+    const category = normalizeCategory(document.getElementById('bCategory').value);
+    const limit = parseFloat(document.getElementById('bLimit').value);
+    if(!category || !limit || limit<=0){ alert('Isi kategori dan batas anggaran dengan benar.'); return; }
+    const l = activeLedger();
+    l.budgets = l.budgets || [];
+    const existing = l.budgets.find(b=>b.category===category);
+    if(existing) existing.limit = limit; else l.budgets.push({ category, limit });
+    document.getElementById('bCategory').value=''; document.getElementById('bLimit').value='';
+    renderBudgets(); persistLedger(l);
+  });
+
   document.getElementById('btnFab').addEventListener('click', ()=>{
     document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
     document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -996,12 +1168,23 @@ service cloud.firestore {
 
   function attachListener(userId){
     if(unsubscribe) unsubscribe();
+    const lastUid = localStorage.getItem('bb_last_uid');
+    const isSameAccountAsBefore = lastUid === userId;
     const ref = collection(fbDb, 'users', userId, 'ledgers');
     unsubscribe = onSnapshot(ref, (snap)=>{
       if(snap.empty){
-        ledgers.forEach(l=> setDoc(doc(fbDb,'users',userId,'ledgers',l.id), l));
+        if(isSameAccountAsBefore){
+          ledgers.forEach(l=> setDoc(doc(fbDb,'users',userId,'ledgers',l.id), l));
+        } else {
+          ledgers = [{ id: uid(), name:'Buku Besar', logo:null, accent:'#2451B8', public:false, transactions:[] }];
+          activeLedgerId = ledgers[0].id;
+          setDoc(doc(fbDb,'users',userId,'ledgers',ledgers[0].id), ledgers[0]);
+          saveLocal(); refreshEverything();
+        }
+        localStorage.setItem('bb_last_uid', userId);
         return;
       }
+      localStorage.setItem('bb_last_uid', userId);
       const remote = [];
       snap.forEach(d=> remote.push(d.data()));
       ledgers = remote;
@@ -1024,7 +1207,14 @@ service cloud.firestore {
     try{ await signInWithPopup(fbAuth, new GoogleAuthProvider()); }
     catch(e){ setStatus('Gagal masuk: ' + e.message); }
   });
-  document.getElementById('btnSignOut').addEventListener('click', async ()=>{ if(fbAuth) await signOut(fbAuth); });
+  document.getElementById('btnSignOut').addEventListener('click', async ()=>{
+    if(fbAuth) await signOut(fbAuth);
+    ledgers = [{ id: uid(), name:'Buku Besar', logo:null, accent:'#2451B8', public:false, transactions:[] }];
+    activeLedgerId = ledgers[0].id;
+    localStorage.removeItem('bb_last_uid');
+    saveLocal();
+    refreshEverything();
+  });
 
   (function init(){
     loadLocal();
